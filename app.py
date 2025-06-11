@@ -56,7 +56,7 @@ def main():
     # Header
     st.markdown("""
     <div class="main-header">
-        <h1>📋 IRS Form 8949 Generator</h1>
+        <h1>📋 Bitwave IRS Form 8949 Generator</h1>
         <p><strong>Bitwave Actions Report Edition</strong></p>
         <p>Convert your Bitwave actions CSV export to official IRS Form 8949</p>
     </div>
