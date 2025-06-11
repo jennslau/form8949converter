@@ -347,7 +347,7 @@ def generate_form_8949_pages(transactions, part_type, taxpayer_name, taxpayer_ss
     return pdf_files
 
 def create_form_with_official_template(buffer, transactions, part_type, taxpayer_name, taxpayer_ssn, tax_year, box_type, page_num, total_pages, all_transactions):
-    """Create Form 8949 using official IRS template with precise field mapping to light blue autofill boxes"""
+    """Create Form 8949 using official IRS template with PERFECT alignment to form table structure"""
     try:
         # Get official IRS Form 8949 PDF
         official_pdf = get_official_form_8949(tax_year)
@@ -370,130 +370,142 @@ def create_form_with_official_template(buffer, transactions, part_type, taxpayer
         c = canvas.Canvas(overlay_buffer, pagesize=letter)
         width, height = letter
         
-        # CORRECTED COORDINATES - Measured precisely to align with light blue autofill boxes
+        # PRECISELY MEASURED COORDINATES - Based on actual IRS Form 8949 structure
         
-        # Taxpayer information fields (blue header boxes at top)
-        name_field_x = 65      # Left edge of name blue box
-        name_field_y = height - 148
-        ssn_field_x = 675      # Right edge of SSN blue box  
-        ssn_field_y = height - 148
+        # Taxpayer information fields (header boxes) - CORRECTED POSITIONING
+        name_field_x = 75       # Left edge of name field box
+        name_field_y = height - 155
+        ssn_field_x = 550       # Right-aligned in SSN field box  
+        ssn_field_y = height - 155
         
-        # Checkbox positions (measured from actual form)
+        # Checkbox positions - measured from actual form
         if part_type == "Part I":
-            checkbox_base_y = height - 429   # Part I checkboxes
-            # CRITICAL: Start exactly where light blue rows begin
-            table_start_y = height - 567     # First light blue row position
+            checkbox_base_y = height - 427   # Part I checkboxes (A, B, C)
+            # CRITICAL FIX: Move table start DOWN to actual first data row
+            table_start_y = height - 595     # First transaction row (after headers)
         else:
-            checkbox_base_y = height - 350   # Part II checkboxes  
-            table_start_y = height - 567     # First light blue row for Part II
+            checkbox_base_y = height - 350   # Part II checkboxes (D, E, F) 
+            table_start_y = height - 595     # Same position for Part II
         
-        checkbox_x = 42
+        checkbox_x = 45
         
-        # PRECISE column positions - mapped to center/align within each light blue box
+        # RECALIBRATED column positions - measured to fit within exact form boundaries
         col_positions = {
-            'description': 55,      # Column (a) - left edge of blue box + padding
-            'date_acquired': 210,   # Column (b) - center of blue box
-            'date_sold': 280,       # Column (c) - center of blue box
-            'proceeds': 380,        # Column (d) - right edge of blue box
-            'cost_basis': 460,      # Column (e) - right edge of blue box  
-            'code': 510,            # Column (f) - center of small blue box
-            'adjustment': 560,      # Column (g) - right edge of blue box
-            'gain_loss': 630        # Column (h) - right edge of rightmost blue box
+            'description': 50,      # Column (a) - fits within narrow left column
+            'date_acquired': 195,   # Column (b) - centered in date column
+            'date_sold': 260,       # Column (c) - centered in date column
+            'proceeds': 340,        # Column (d) - right-aligned within proceeds column
+            'cost_basis': 415,      # Column (e) - right-aligned within basis column  
+            'code': 455,            # Column (f) - centered in code column
+            'adjustment': 495,      # Column (g) - right-aligned in adjustment column
+            'gain_loss': 565        # Column (h) - right-aligned in gain/loss column
         }
         
-        # CORRECTED row spacing - matches exact height of light blue boxes
-        row_height = 17.5  # Measured from blue box to blue box
+        # INCREASED row spacing to match actual form row height
+        row_height = 19.5  # Measured spacing between form table rows
         
-        # Fill taxpayer information in header blue boxes
-        c.setFont("Helvetica", 9)
-        c.drawString(name_field_x, name_field_y, taxpayer_name[:45])
+        # Fill taxpayer information with corrected positioning
+        c.setFont("Helvetica", 10)
+        c.drawString(name_field_x, name_field_y, taxpayer_name[:40])
         c.drawRightString(ssn_field_x, ssn_field_y, taxpayer_ssn)
         
-        # Check appropriate box based on selection
-        c.setFont("Helvetica", 10)
+        # Check appropriate box
+        c.setFont("Helvetica", 12)
         box_letter = box_type.split()[1]  # Extract A, B, or C
         
         if part_type == "Part I":
             if box_letter == "A":
                 c.drawString(checkbox_x, checkbox_base_y, "✓")
             elif box_letter == "B": 
-                c.drawString(checkbox_x, checkbox_base_y - 18, "✓")
+                c.drawString(checkbox_x, checkbox_base_y - 20, "✓")
             elif box_letter == "C":
-                c.drawString(checkbox_x, checkbox_base_y - 36, "✓")
+                c.drawString(checkbox_x, checkbox_base_y - 40, "✓")
         else:  # Part II - maps A->D, B->E, C->F
             if box_letter == "A":  # Maps to Box D for long-term
                 c.drawString(checkbox_x, checkbox_base_y, "✓")
             elif box_letter == "B":  # Maps to Box E for long-term
-                c.drawString(checkbox_x, checkbox_base_y - 18, "✓")
+                c.drawString(checkbox_x, checkbox_base_y - 20, "✓")
             elif box_letter == "C":  # Maps to Box F for long-term
-                c.drawString(checkbox_x, checkbox_base_y - 36, "✓")
+                c.drawString(checkbox_x, checkbox_base_y - 40, "✓")
         
-        # CORRECTED font size to fit cleanly in blue boxes
-        c.setFont("Helvetica", 6.5)  # Smaller font to fit in blue cells
+        # REDUCED font size to fit cleanly within cells
+        c.setFont("Helvetica", 5.5)  # Smaller font for clean cell fit
         
-        # Fill transaction data in light blue autofill boxes
+        # Fill transaction data with precise alignment and text width checking
         for i, transaction in enumerate(transactions[:14]):  # Maximum 14 transactions per page
             y_pos = table_start_y - (i * row_height)
             
-            # Format data to fit within blue box constraints
-            description = transaction['description'][:28]  # Truncate to fit blue box width
+            # Format and truncate data to fit within column boundaries
+            description = transaction['description'][:20]  # Strict limit for narrow column
             date_acquired = transaction['date_acquired'].strftime('%m/%d/%Y')
             date_sold = transaction['date_sold'].strftime('%m/%d/%Y')
             
-            # Column (a) - Description: Left-aligned within blue box
+            # Column (a) - Description: Left-aligned, truncated to fit
             c.drawString(col_positions['description'], y_pos, description)
             
-            # Column (b) - Date acquired: Centered within blue box
+            # Column (b) - Date acquired: Centered precisely
             date_acq_width = c.stringWidth(date_acquired)
             c.drawString(col_positions['date_acquired'] - date_acq_width/2, y_pos, date_acquired)
             
-            # Column (c) - Date sold: Centered within blue box
+            # Column (c) - Date sold: Centered precisely
             date_sold_width = c.stringWidth(date_sold)
             c.drawString(col_positions['date_sold'] - date_sold_width/2, y_pos, date_sold)
             
-            # Column (d) - Proceeds: Right-aligned within blue box
+            # Column (d) - Proceeds: Right-aligned within column boundaries
             proceeds_text = f"{transaction['proceeds']:,.2f}"
+            # Check width and truncate if necessary
+            if c.stringWidth(proceeds_text) > 65:  # Column width limit
+                proceeds_text = f"{transaction['proceeds']:,.0f}"
             c.drawRightString(col_positions['proceeds'], y_pos, proceeds_text)
             
-            # Column (e) - Cost basis: Right-aligned within blue box
+            # Column (e) - Cost basis: Right-aligned within column boundaries
             basis_text = f"{transaction['cost_basis']:,.2f}"
+            # Check width and truncate if necessary
+            if c.stringWidth(basis_text) > 65:  # Column width limit
+                basis_text = f"{transaction['cost_basis']:,.0f}"
             c.drawRightString(col_positions['cost_basis'], y_pos, basis_text)
             
-            # Column (f) - Code: Centered (leave blank for crypto - no codes needed)
-            # c.drawString(col_positions['code'], y_pos, "")
+            # Column (f) - Code: Leave blank for crypto transactions
             
-            # Column (g) - Adjustment: Right-aligned (leave blank - no adjustments)
-            # c.drawRightString(col_positions['adjustment'], y_pos, "")
+            # Column (g) - Adjustment: Leave blank (no adjustments for crypto)
             
-            # Column (h) - Gain/Loss: Right-aligned within rightmost blue box
+            # Column (h) - Gain/Loss: Right-aligned with proper formatting
             gain_loss = transaction['gain_loss']
             if gain_loss < 0:
-                gain_loss_text = f"({abs(gain_loss):,.2f})"  # Parentheses for losses (IRS standard)
+                gain_loss_text = f"({abs(gain_loss):,.2f})"  # Parentheses for losses
             else:
                 gain_loss_text = f"{gain_loss:,.2f}"
+            
+            # Check width and truncate if necessary
+            if c.stringWidth(gain_loss_text) > 70:  # Column width limit
+                if gain_loss < 0:
+                    gain_loss_text = f"({abs(gain_loss):,.0f})"
+                else:
+                    gain_loss_text = f"{gain_loss:,.0f}"
+            
             c.drawRightString(col_positions['gain_loss'], y_pos, gain_loss_text)
         
-        # Add totals on final page only (in totals row at bottom)
+        # Add totals on final page - positioned in official totals row
         if page_num == total_pages and len(transactions) > 0:
-            # Position totals in the official totals row
-            totals_y = table_start_y - (14 * row_height) - 8
+            # Position totals in the official "Totals" row at bottom of table
+            totals_y = table_start_y - (14 * row_height) - 15
             
-            # Calculate totals for ALL transactions (not just this page)
+            # Calculate totals for ALL transactions
             total_proceeds = sum(t['proceeds'] for t in all_transactions)
             total_basis = sum(t['cost_basis'] for t in all_transactions)
             total_gain_loss = sum(t['gain_loss'] for t in all_transactions)
             
-            # Use bold font for totals
-            c.setFont("Helvetica-Bold", 6.5)
+            # Use slightly larger bold font for totals
+            c.setFont("Helvetica-Bold", 6)
             
-            # Draw totals aligned with their respective columns
+            # Draw totals with same column alignment
             total_proceeds_text = f"{total_proceeds:,.2f}"
             total_basis_text = f"{total_basis:,.2f}"
             
             c.drawRightString(col_positions['proceeds'], totals_y, total_proceeds_text)
             c.drawRightString(col_positions['cost_basis'], totals_y, total_basis_text)
             
-            # Format total gain/loss with parentheses if negative
+            # Format total gain/loss
             if total_gain_loss < 0:
                 total_gl_text = f"({abs(total_gain_loss):,.2f})"
             else:
