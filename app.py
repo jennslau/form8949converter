@@ -115,9 +115,9 @@ def main():
     st.markdown('<h2 class="section-header">📁 Upload Transaction Data</h2>', unsafe_allow_html=True)
     
     uploaded_file = st.file_uploader(
-        "Choose CSV file with your cryptocurrency transactions",
+        "Choose CSV file with your Bitwave actions report data",
         type=['csv'],
-        help="Upload a CSV file with your transaction data"
+        help="Upload a CSV file with your Bitwave actions report data"
     )
     
     if uploaded_file is not None:
