@@ -395,7 +395,7 @@ def create_form_with_official_template(buffer, transactions, part_type, taxpayer
             'date_acquired': 195,   # Column (b) - centered in date column
             'date_sold': 260,       # Column (c) - centered in date column
             'proceeds': 335,        # Column (d) - right-aligned within proceeds column
-            'cost_basis': 405,      # Column (e) - right-aligned within basis column  
+            'cost_basis': 400,      # Column (e) - right-aligned within basis column  
             'code': 455,            # Column (f) - centered in code column
             'adjustment': 495,      # Column (g) - right-aligned in adjustment column
             'gain_loss': 565        # Column (h) - right-aligned in gain/loss column
