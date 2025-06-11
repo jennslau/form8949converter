@@ -380,22 +380,22 @@ def create_form_with_official_template(buffer, transactions, part_type, taxpayer
         
         # Checkbox positions - measured from actual form
         if part_type == "Part I":
-            checkbox_base_y = height - 300   # Part I checkboxes (A, B, C)
+            checkbox_base_y = height - 290   # Part I checkboxes (A, B, C)
             # CRITICAL FIX: Move table start DOWN to first data row below headers
-            table_start_y = height - 350     # First transaction in first data row
+            table_start_y = height - 345     # First transaction in first data row
         else:
-            checkbox_base_y = height - 300   # Part II checkboxes (D, E, F) 
-            table_start_y = height - 350     # Same position for Part II
+            checkbox_base_y = height - 290   # Part II checkboxes (D, E, F) 
+            table_start_y = height - 345     # Same position for Part II
         
-        checkbox_x = 45
+        checkbox_x = 50
         
         # Column positions - aligned with form structure
         col_positions = {
             'description': 50,      # Column (a) - fits within narrow left column
             'date_acquired': 195,   # Column (b) - centered in date column
             'date_sold': 260,       # Column (c) - centered in date column
-            'proceeds': 340,        # Column (d) - right-aligned within proceeds column
-            'cost_basis': 415,      # Column (e) - right-aligned within basis column  
+            'proceeds': 335,        # Column (d) - right-aligned within proceeds column
+            'cost_basis': 405,      # Column (e) - right-aligned within basis column  
             'code': 455,            # Column (f) - centered in code column
             'adjustment': 495,      # Column (g) - right-aligned in adjustment column
             'gain_loss': 565        # Column (h) - right-aligned in gain/loss column
