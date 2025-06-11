@@ -51,7 +51,7 @@ def main():
     st.markdown("""
     <div class="main-header">
         <h1>📋 IRS Form 8949 Generator</h1>
-        <p>Convert your cryptocurrency transactions to official IRS Form 8949</p>
+        <p>Convert your Bitwave actions report to official IRS Form 8949</p>
     </div>
     """, unsafe_allow_html=True)
     
