@@ -376,29 +376,29 @@ def create_form_with_official_template(buffer, transactions, part_type, taxpayer
         if part_type == "Part I":
             # Part I (Page 1) positioning
             name_field_x = 75
-            name_field_y = 105           # Page 1 name height
+            name_field_y = 50           # Page 1 name height
             ssn_field_x = 550
-            ssn_field_y = 105            # Page 1 SSN height
-            checkbox_base_y = 250        # Part I checkbox start at height 250
-            table_start_y = 360          # Part I table start at height 360
+            ssn_field_y = 50            # Page 1 SSN height
+            checkbox_base_y = 100        # Part I checkbox start at height 250
+            table_start_y = 300          # Part I table start at height 360
         else:  # Part II
             # Part II (Page 2) positioning
             name_field_x = 75
-            name_field_y = 95            # Page 2 name height
+            name_field_y = 50            # Page 2 name height
             ssn_field_x = 550
-            ssn_field_y = 95             # Page 2 SSN height
-            checkbox_base_y = 200        # Part II checkbox start at height 200
-            table_start_y = 300          # Part II table start at height 300
+            ssn_field_y = 50             # Page 2 SSN height
+            checkbox_base_y = 100        # Part II checkbox start at height 200
+            table_start_y = 250          # Part II table start at height 300
         
-        checkbox_x = 45
+        checkbox_x = 50
         
         # Column positions - aligned with form structure
         col_positions = {
             'description': 50,      # Column (a) - fits within narrow left column
             'date_acquired': 195,   # Column (b) - centered in date column
-            'date_sold': 260,       # Column (c) - centered in date column
-            'proceeds': 340,        # Column (d) - right-aligned within proceeds column
-            'cost_basis': 415,      # Column (e) - right-aligned within basis column  
+            'date_sold': 255,       # Column (c) - centered in date column
+            'proceeds': 330,        # Column (d) - right-aligned within proceeds column
+            'cost_basis': 400,      # Column (e) - right-aligned within basis column  
             'code': 455,            # Column (f) - centered in code column
             'adjustment': 495,      # Column (g) - right-aligned in adjustment column
             'gain_loss': 565        # Column (h) - right-aligned in gain/loss column
