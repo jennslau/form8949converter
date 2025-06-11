@@ -68,7 +68,7 @@ def main():
         ### Required Bitwave CSV Columns:
         - **action**: Transaction type ('sell' transactions will be processed)
         - **asset**: Cryptocurrency symbol (e.g., "BTC", "ETH")
-        - **timestamp**: Sale date in ISO format
+        - **timestampSEC**: Sale date as Unix timestamp in seconds
         - **lotId**: Unique lot identifier for matching acquisitions
         - **lotAcquisitionTimestampSEC**: Acquisition timestamp in seconds
         - **` proceeds `**: Sale proceeds (note: column has spaces)
@@ -151,7 +151,7 @@ def main():
             
             # Validate required columns for Bitwave format
             required_bitwave_columns = [
-                'action', 'asset', 'timestamp', 'lotId', 'lotAcquisitionTimestampSEC',
+                'action', 'asset', 'timestampSEC', 'lotId', 'lotAcquisitionTimestampSEC',
                 ' proceeds ', ' costBasisRelieved ', ' shortTermGainLoss ', ' longTermGainLoss '
             ]
             missing_columns = [col for col in required_bitwave_columns if col not in df.columns]
@@ -315,22 +315,22 @@ def process_bitwave_transactions(df):
     
     # Debug: Show sample of what we're processing
     st.write("**Sample of sell actions data:**")
-    sample_df = sell_actions.head(3)[['action', 'asset', 'timestamp', ' proceeds ', ' costBasisRelieved ']].copy()
+    sample_df = sell_actions.head(3)[['action', 'asset', 'timestampSEC', 'lotAcquisitionTimestampSEC', ' proceeds ', ' costBasisRelieved ']].copy()
     st.dataframe(sample_df)
     
     for _, row in sell_actions.iterrows():
         try:
             # Extract and validate dates with better error handling
             try:
-                # Handle the timestamp conversion more robustly
-                timestamp_val = row['timestamp']
-                if pd.isna(timestamp_val) or timestamp_val == '':
-                    raise ValueError("Empty timestamp")
-                date_sold = pd.to_datetime(timestamp_val, errors='coerce')
+                # Use timestampSEC for sale date (Unix timestamp in seconds)
+                timestamp_sec = row['timestampSEC']
+                if pd.isna(timestamp_sec) or timestamp_sec == 0 or timestamp_sec == '':
+                    raise ValueError("Empty timestampSEC")
+                date_sold = pd.to_datetime(float(timestamp_sec), unit='s', errors='coerce')
                 if pd.isna(date_sold):
-                    raise ValueError("Invalid sale date conversion")
+                    raise ValueError("Invalid sale date conversion from timestampSEC")
             except Exception as e:
-                validation_warnings.append(f"Invalid sale timestamp for transaction {row.get('txnId', 'unknown')}: {str(e)}")
+                validation_warnings.append(f"Invalid sale timestampSEC for transaction {row.get('txnId', 'unknown')}: {str(e)}")
                 error_count += 1
                 continue
             
