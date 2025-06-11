@@ -313,26 +313,42 @@ def process_bitwave_transactions(df):
     processed_count = 0
     error_count = 0
     
+    # Debug: Show sample of what we're processing
+    st.write("**Sample of sell actions data:**")
+    sample_df = sell_actions.head(3)[['action', 'asset', 'timestamp', ' proceeds ', ' costBasisRelieved ']].copy()
+    st.dataframe(sample_df)
+    
     for _, row in sell_actions.iterrows():
+        try:
         try:
             # Extract and validate dates with better error handling
             try:
-                date_sold = pd.to_datetime(row['timestamp'])
+                # Handle the timestamp conversion more robustly
+                timestamp_val = row['timestamp']
+                if pd.isna(timestamp_val) or timestamp_val == '':
+                    raise ValueError("Empty timestamp")
+                date_sold = pd.to_datetime(timestamp_val, errors='coerce')
                 if pd.isna(date_sold):
-                    raise ValueError("Invalid sale date")
-            except:
-                validation_warnings.append(f"Invalid sale timestamp for row {row.get('txnId', 'unknown')}")
+                    raise ValueError("Invalid sale date conversion")
+            except Exception as e:
+                validation_warnings.append(f"Invalid sale timestamp for transaction {row.get('txnId', 'unknown')}: {str(e)}")
                 error_count += 1
                 continue
             
             try:
                 # Convert acquisition timestamp from seconds to datetime
                 lot_acq_timestamp = row['lotAcquisitionTimestampSEC']
-                if pd.isna(lot_acq_timestamp) or lot_acq_timestamp == 0:
-                    raise ValueError("Invalid acquisition timestamp")
-                date_acquired = pd.to_datetime(int(lot_acq_timestamp), unit='s')
-            except:
-                validation_warnings.append(f"Invalid acquisition timestamp for row {row.get('txnId', 'unknown')}")
+                if pd.isna(lot_acq_timestamp) or lot_acq_timestamp == 0 or lot_acq_timestamp == '':
+                    raise ValueError("Missing acquisition timestamp")
+                
+                # Ensure it's a number and convert to datetime
+                lot_acq_seconds = float(lot_acq_timestamp)
+                date_acquired = pd.to_datetime(lot_acq_seconds, unit='s', errors='coerce')
+                if pd.isna(date_acquired):
+                    raise ValueError("Invalid acquisition date conversion")
+                    
+            except Exception as e:
+                validation_warnings.append(f"Invalid acquisition timestamp for transaction {row.get('txnId', 'unknown')}: {str(e)}")
                 error_count += 1
                 continue
             
@@ -407,6 +423,14 @@ def process_bitwave_transactions(df):
     if error_count > 0:
         st.warning(f"⚠️ Skipped {error_count} transactions due to data issues")
     
+    # Debug information about what failed
+    if error_count > 0 and processed_count == 0:
+        st.error("🔍 **DEBUG INFO**: All transactions failed processing. Common issues:")
+        st.write("• Date conversion problems with pandas")
+        st.write("• Missing or invalid timestamp fields") 
+        st.write("• Data type mismatches")
+        st.write("Check the validation warnings above for specific errors.")
+    
     return transactions, validation_warnings
 
 def clean_bitwave_currency_value(value):
@@ -418,7 +442,7 @@ def clean_bitwave_currency_value(value):
     str_val = str(value).strip()
     
     # Handle Bitwave's format for zero/empty values
-    if str_val in ['-', ' -   ', '']:
+    if str_val in ['-', ' -   ', '', 'null', 'None']:
         return 0.0
     
     # Handle parentheses for negative values (Bitwave format)
@@ -433,7 +457,7 @@ def clean_bitwave_currency_value(value):
     try:
         result = float(str_val)
         return -result if is_negative else result
-    except:
+    except (ValueError, TypeError):
         return 0.0
 
 def separate_bitwave_transactions_by_term(transactions):
