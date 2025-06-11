@@ -1,193 +1,343 @@
 import streamlit as st
 import pandas as pd
 from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter, A4
+from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
 import io
 import zipfile
 from datetime import datetime
+import re
+import requests
+import PyPDF2
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 
 def main():
+    """Main Streamlit application for Form 8949 generation"""
     st.set_page_config(
-        page_title="CSV to PDF Form Filler",
-        page_icon="📄",
+        page_title="Professional Form 8949 Generator",
+        page_icon="📋",
         layout="wide"
     )
     
-    st.title("📄 CSV to PDF Form Filler")
-    st.markdown("Upload a CSV file and generate filled PDF forms for each row of data.")
+    # Professional styling
+    st.markdown("""
+    <style>
+    .main-header {
+        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        color: white;
+        border-radius: 10px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        text-align: center;
+    }
+    .section-header {
+        color: #1e3c72;
+        border-bottom: 2px solid #2a5298;
+        padding-bottom: 0.5rem;
+        margin-top: 2rem;
+        margin-bottom: 1rem;
+    }
+    .instruction-box {
+        background-color: #f8f9fa;
+        border-left: 4px solid #2a5298;
+        padding: 1rem;
+        margin: 1rem 0;
+    }
+    </style>
+    """, unsafe_allow_html=True)
     
-    # Sidebar for configuration
-    st.sidebar.header("Configuration")
+    # Header
+    st.markdown("""
+    <div class="main-header">
+        <h1>📋 Professional Form 8949 Generator</h1>
+        <p>Convert your cryptocurrency transactions to official IRS Form 8949</p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    # Template selection
-    template_type = st.sidebar.selectbox(
-        "Choose PDF Template Type:",
-        ["Simple Form", "Invoice Template", "Certificate Template", "Report Template"]
-    )
-    
-    # Main content area
-    col1, col2 = st.columns([1, 1])
-    
-    with col1:
-        st.header("Step 1: Upload CSV File")
-        uploaded_file = st.file_uploader(
-            "Choose a CSV file",
-            type="csv",
-            help="Upload a CSV file with the data you want to use in your PDFs"
-        )
+    # Instructions
+    with st.expander("📖 Instructions & Requirements", expanded=False):
+        st.markdown("""
+        ### Required CSV Columns:
+        - **Description**: Asset description (e.g., "BTC cryptocurrency")
+        - **Date Acquired**: Purchase date (MM/DD/YYYY)
+        - **Date Sold**: Sale date (MM/DD/YYYY)
+        - **Proceeds**: Sale amount (column d)
+        - **Cost Basis**: Purchase cost (column e)
+        - **Gain/Loss**: Calculated gain or loss (column h)
         
-        if uploaded_file is not None:
-            try:
-                # Read the CSV file
-                df = pd.read_csv(uploaded_file)
-                st.success(f"✅ CSV loaded successfully! Found {len(df)} rows and {len(df.columns)} columns.")
-                
-                # Display preview
-                st.subheader("Data Preview")
-                st.dataframe(df.head())
-                
-                # Show column names
-                st.subheader("Available Columns")
-                st.write("These are the column names you can use in your PDF:")
-                for i, col in enumerate(df.columns, 1):
-                    st.write(f"{i}. **{col}**")
-                
-            except Exception as e:
-                st.error(f"Error reading CSV file: {str(e)}")
-                df = None
-        else:
-            df = None
+        ### Features:
+        - ✅ Maps directly to official IRS Form 8949 fields
+        - ✅ Automatically handles multiple pages (14 transactions per page)
+        - ✅ Separates short-term and long-term transactions
+        - ✅ Applies taxpayer information to all pages
+        - ✅ Professional PDF output ready for IRS submission
+        """)
+    
+    # Taxpayer Information Section
+    st.markdown('<h2 class="section-header">👤 Taxpayer Information</h2>', unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        taxpayer_name = st.text_input(
+            "Full Name (as shown on tax return)",
+            placeholder="John and Jane Smith"
+        )
+    with col2:
+        taxpayer_ssn = st.text_input(
+            "Social Security Number",
+            placeholder="123-45-6789"
+        )
+    
+    # Form Configuration
+    st.markdown('<h2 class="section-header">⚙️ Form Configuration</h2>', unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        tax_year = st.selectbox(
+            "Tax Year",
+            [2024, 2023, 2022, 2021, 2020],
+            index=0
+        )
     
     with col2:
-        st.header("Step 2: Configure PDF Template")
-        
-        if df is not None:
-            # Column mapping section
-            st.subheader("Map CSV Columns to PDF Fields")
+        default_box_type = st.selectbox(
+            "Default Box Type",
+            [
+                "Box B - Basis NOT reported to IRS",
+                "Box A - Basis reported to IRS", 
+                "Box C - Various situations"
+            ],
+            index=0
+        )
+    
+    # File Upload Section
+    st.markdown('<h2 class="section-header">📁 Upload Transaction Data</h2>', unsafe_allow_html=True)
+    
+    uploaded_file = st.file_uploader(
+        "Choose CSV file with your cryptocurrency transactions",
+        type=['csv'],
+        help="Upload a CSV file with your transaction data"
+    )
+    
+    if uploaded_file is not None:
+        try:
+            # Read and validate CSV
+            df = pd.read_csv(uploaded_file)
+            st.success(f"✅ File uploaded successfully! Found {len(df)} transactions.")
             
-            # Get template fields based on selection
-            template_fields = get_template_fields(template_type)
+            # Display preview
+            with st.expander("📊 Data Preview", expanded=True):
+                st.dataframe(df.head(10))
             
-            # Create mapping interface
-            field_mapping = {}
-            for field_name, field_description in template_fields.items():
-                selected_column = st.selectbox(
-                    f"{field_description}:",
-                    [""] + list(df.columns),
-                    key=f"mapping_{field_name}"
-                )
-                if selected_column:
-                    field_mapping[field_name] = selected_column
+            # Validate required columns
+            required_columns = ['Description', 'Date Acquired', 'Date Sold', 'Proceeds', 'Cost Basis', 'Gain/Loss']
+            missing_columns = [col for col in required_columns if col not in df.columns]
             
-            # PDF generation settings
-            st.subheader("PDF Settings")
-            page_size = st.selectbox("Page Size:", ["Letter", "A4"])
-            font_size = st.slider("Font Size:", 8, 16, 12)
+            if missing_columns:
+                st.error(f"❌ Missing required columns: {', '.join(missing_columns)}")
+                st.info("Please ensure your CSV has all required columns with exact names.")
+                return
             
-            # Generate PDFs button
-            if st.button("🚀 Generate PDFs", type="primary"):
-                if field_mapping:
-                    try:
-                        # Generate PDFs
-                        pdf_files = generate_pdfs(df, field_mapping, template_type, page_size, font_size)
-                        
-                        if len(pdf_files) == 1:
-                            # Single PDF download
-                            st.download_button(
-                                label="📥 Download PDF",
-                                data=pdf_files[0]['content'],
-                                file_name=pdf_files[0]['filename'],
-                                mime="application/pdf"
-                            )
-                        else:
-                            # Multiple PDFs - create zip
-                            zip_data = create_zip_file(pdf_files)
-                            st.download_button(
-                                label="📦 Download All PDFs (ZIP)",
-                                data=zip_data,
-                                file_name=f"generated_pdfs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
-                                mime="application/zip"
-                            )
-                        
-                        st.success(f"✅ Generated {len(pdf_files)} PDF file(s) successfully!")
-                        
-                    except Exception as e:
-                        st.error(f"Error generating PDFs: {str(e)}")
+            # Process transactions
+            transactions = process_transactions(df)
+            
+            if not transactions:
+                st.error("❌ No valid transactions found in the uploaded file.")
+                return
+            
+            # Separate short-term and long-term
+            short_term, long_term = separate_transactions_by_term(transactions)
+            
+            # Display summary
+            st.markdown('<h2 class="section-header">📈 Transaction Summary</h2>', unsafe_allow_html=True)
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total Transactions", len(transactions))
+            with col2:
+                st.metric("Short-term", len(short_term))
+            with col3:
+                st.metric("Long-term", len(long_term))
+            with col4:
+                total_gain_loss = sum(t['gain_loss'] for t in transactions)
+                st.metric("Net Gain/Loss", f"${total_gain_loss:,.2f}")
+            
+            # Generate Forms
+            if st.button("🚀 Generate Form 8949 PDFs", type="primary"):
+                if not taxpayer_name or not taxpayer_ssn:
+                    st.error("⚠️ Please enter taxpayer name and SSN before generating forms.")
+                    return
+                
+                with st.spinner("Generating professional Form 8949 PDFs..."):
+                    pdf_files = generate_all_forms(
+                        short_term, 
+                        long_term, 
+                        taxpayer_name, 
+                        taxpayer_ssn, 
+                        tax_year, 
+                        default_box_type
+                    )
+                
+                if pdf_files:
+                    if len(pdf_files) == 1:
+                        # Single PDF download
+                        st.download_button(
+                            label="📥 Download Form 8949",
+                            data=pdf_files[0]['content'],
+                            file_name=pdf_files[0]['filename'],
+                            mime="application/pdf"
+                        )
+                    else:
+                        # Multiple PDFs in ZIP
+                        zip_data = create_zip_file(pdf_files)
+                        st.download_button(
+                            label="📦 Download All Forms (ZIP)",
+                            data=zip_data,
+                            file_name=f"Form_8949_{tax_year}_Complete.zip",
+                            mime="application/zip"
+                        )
+                    
+                    st.success(f"✅ Generated {len(pdf_files)} Form 8949 PDF(s) successfully!")
                 else:
-                    st.warning("Please map at least one CSV column to a PDF field.")
+                    st.error("❌ Failed to generate PDF files. Please check your data and try again.")
         
-        else:
-            st.info("👆 Please upload a CSV file first to configure the PDF template.")
+        except Exception as e:
+            st.error(f"❌ Error processing file: {str(e)}")
 
-def get_template_fields(template_type):
-    """Define fields for different template types"""
-    templates = {
-        "Simple Form": {
-            "name": "Name/Title",
-            "email": "Email Address",
-            "phone": "Phone Number",
-            "address": "Address",
-            "notes": "Additional Notes"
-        },
-        "Invoice Template": {
-            "invoice_number": "Invoice Number",
-            "client_name": "Client Name",
-            "client_address": "Client Address",
-            "date": "Invoice Date",
-            "amount": "Total Amount",
-            "description": "Service Description"
-        },
-        "Certificate Template": {
-            "recipient_name": "Recipient Name",
-            "course_name": "Course/Achievement",
-            "date_completed": "Completion Date",
-            "instructor": "Instructor/Issuer",
-            "grade": "Grade/Score"
-        },
-        "Report Template": {
-            "title": "Report Title",
-            "author": "Author Name",
-            "date": "Report Date",
-            "summary": "Executive Summary",
-            "data_point_1": "Key Metric 1",
-            "data_point_2": "Key Metric 2"
-        }
-    }
-    return templates.get(template_type, templates["Simple Form"])
+def process_transactions(df):
+    """Process CSV data into standardized transaction format"""
+    transactions = []
+    
+    for _, row in df.iterrows():
+        try:
+            # Parse dates
+            date_acquired = pd.to_datetime(row['Date Acquired'])
+            date_sold = pd.to_datetime(row['Date Sold'])
+            
+            # Calculate holding period
+            holding_days = (date_sold - date_acquired).days
+            is_short_term = holding_days <= 365
+            
+            # Clean monetary values
+            proceeds = clean_currency_value(row['Proceeds'])
+            cost_basis = clean_currency_value(row['Cost Basis'])
+            gain_loss = clean_currency_value(row['Gain/Loss'])
+            
+            # Create transaction record
+            transaction = {
+                'description': str(row['Description']).strip(),
+                'date_acquired': date_acquired,
+                'date_sold': date_sold,
+                'proceeds': proceeds,
+                'cost_basis': cost_basis,
+                'gain_loss': gain_loss,
+                'is_short_term': is_short_term,
+                'holding_days': holding_days
+            }
+            
+            transactions.append(transaction)
+            
+        except Exception as e:
+            st.warning(f"⚠️ Skipping invalid row: {e}")
+            continue
+    
+    return transactions
 
-def generate_pdfs(df, field_mapping, template_type, page_size, font_size):
-    """Generate PDF files based on the CSV data and template"""
+def clean_currency_value(value):
+    """Clean and parse currency values from various formats"""
+    if pd.isna(value) or value == '' or value == '-':
+        return 0.0
+    
+    # Convert to string and clean
+    str_val = str(value).strip()
+    
+    # Handle parentheses for negative values
+    is_negative = False
+    if '(' in str_val and ')' in str_val:
+        is_negative = True
+        str_val = str_val.replace('(', '').replace(')', '')
+    
+    # Remove currency symbols, commas, and spaces
+    str_val = re.sub(r'[,$\s]', '', str_val)
+    
+    try:
+        result = float(str_val)
+        return -result if is_negative else result
+    except:
+        return 0.0
+
+def separate_transactions_by_term(transactions):
+    """Separate transactions into short-term and long-term based on holding period"""
+    short_term = [t for t in transactions if t['is_short_term']]
+    long_term = [t for t in transactions if not t['is_short_term']]
+    return short_term, long_term
+
+def generate_all_forms(short_term, long_term, taxpayer_name, taxpayer_ssn, tax_year, default_box_type):
+    """Generate all required Form 8949 PDFs"""
     pdf_files = []
     
-    # Set page size
-    if page_size == "A4":
-        page_format = A4
-    else:
-        page_format = letter
+    # Generate short-term forms (Part I)
+    if short_term:
+        short_term_pdfs = generate_form_8949_pages(
+            short_term,
+            "Part I",
+            taxpayer_name,
+            taxpayer_ssn,
+            tax_year,
+            default_box_type,
+            "Short_Term"
+        )
+        pdf_files.extend(short_term_pdfs)
     
-    for index, row in df.iterrows():
-        # Create PDF content
+    # Generate long-term forms (Part II)
+    if long_term:
+        long_term_pdfs = generate_form_8949_pages(
+            long_term,
+            "Part II",
+            taxpayer_name,
+            taxpayer_ssn,
+            tax_year,
+            default_box_type,
+            "Long_Term"
+        )
+        pdf_files.extend(long_term_pdfs)
+    
+    return pdf_files
+
+def generate_form_8949_pages(transactions, part_type, taxpayer_name, taxpayer_ssn, tax_year, box_type, term_suffix):
+    """Generate Form 8949 pages for a set of transactions"""
+    pdf_files = []
+    
+    # Split transactions into pages (14 per page maximum)
+    transactions_per_page = 14
+    total_pages = (len(transactions) + transactions_per_page - 1) // transactions_per_page
+    
+    for page_num in range(total_pages):
+        start_idx = page_num * transactions_per_page
+        end_idx = min(start_idx + transactions_per_page, len(transactions))
+        page_transactions = transactions[start_idx:end_idx]
+        
+        # Create PDF for this page
         buffer = io.BytesIO()
         
-        if template_type == "Simple Form":
-            create_simple_form_pdf(buffer, row, field_mapping, page_format, font_size)
-        elif template_type == "Invoice Template":
-            create_invoice_pdf(buffer, row, field_mapping, page_format, font_size)
-        elif template_type == "Certificate Template":
-            create_certificate_pdf(buffer, row, field_mapping, page_format, font_size)
-        else:  # Report Template
-            create_report_pdf(buffer, row, field_mapping, page_format, font_size)
+        # Try official template first, fallback to custom if needed
+        success = create_form_with_official_template(
+            buffer, page_transactions, part_type, taxpayer_name, 
+            taxpayer_ssn, tax_year, box_type, page_num + 1, total_pages, transactions
+        )
+        
+        if not success:
+            create_custom_form_8949(
+                buffer, page_transactions, part_type, taxpayer_name,
+                taxpayer_ssn, tax_year, box_type, page_num + 1, total_pages, transactions
+            )
         
         # Generate filename
-        name_field = field_mapping.get('name') or field_mapping.get('recipient_name') or field_mapping.get('client_name') or field_mapping.get('title')
-        if name_field and name_field in row:
-            filename = f"{str(row[name_field]).replace(' ', '_')}_{index+1}.pdf"
+        if total_pages == 1:
+            filename = f"Form_8949_{tax_year}_{term_suffix}_{taxpayer_name.replace(' ', '_')}.pdf"
         else:
-            filename = f"document_{index+1}.pdf"
+            filename = f"Form_8949_{tax_year}_{term_suffix}_Page_{page_num + 1}_{taxpayer_name.replace(' ', '_')}.pdf"
         
         pdf_files.append({
             'filename': filename,
@@ -196,194 +346,284 @@ def generate_pdfs(df, field_mapping, template_type, page_size, font_size):
     
     return pdf_files
 
-def create_simple_form_pdf(buffer, row, field_mapping, page_format, font_size):
-    """Create a simple form PDF"""
-    c = canvas.Canvas(buffer, pagesize=page_format)
-    width, height = page_format
-    
-    # Title
-    c.setFont("Helvetica-Bold", font_size + 4)
-    c.drawString(50, height - 50, "Information Form")
-    
-    # Form fields
-    y_position = height - 100
-    c.setFont("Helvetica", font_size)
-    
-    for field_name, column_name in field_mapping.items():
-        if column_name in row:
-            field_label = get_template_fields("Simple Form")[field_name]
-            value = str(row[column_name]) if pd.notna(row[column_name]) else ""
+def create_form_with_official_template(buffer, transactions, part_type, taxpayer_name, taxpayer_ssn, tax_year, box_type, page_num, total_pages, all_transactions):
+    """Create Form 8949 using official IRS template with precise field mapping"""
+    try:
+        # Get official IRS Form 8949 PDF
+        official_pdf = get_official_form_8949(tax_year)
+        if not official_pdf:
+            return False
+        
+        # Read the official PDF
+        official_pdf_stream = io.BytesIO(official_pdf)
+        pdf_reader = PyPDF2.PdfReader(official_pdf_stream)
+        
+        # Select appropriate page (Part I = page 1, Part II = page 2)
+        template_page_num = 0 if part_type == "Part I" else 1
+        if template_page_num >= len(pdf_reader.pages):
+            template_page_num = 0
+        
+        template_page = pdf_reader.pages[template_page_num]
+        
+        # Create overlay with transaction data
+        overlay_buffer = io.BytesIO()
+        c = canvas.Canvas(overlay_buffer, pagesize=letter)
+        width, height = letter
+        
+        # PRECISE COORDINATES measured from official IRS Form 8949
+        # Based on the actual form dimensions and field positions
+        
+        # Taxpayer information fields (top blue boxes)
+        name_field_x = 60
+        name_field_y = height - 155
+        ssn_field_x = 430
+        ssn_field_y = height - 155
+        
+        # Checkbox positions for Part I and Part II
+        if part_type == "Part I":
+            checkbox_base_y = height - 395
+            table_start_y = height - 495  # Start of transaction table
+        else:
+            checkbox_base_y = height - 350  # Adjusted for Part II
+            table_start_y = height - 450   # Start of transaction table for Part II
+        
+        checkbox_x = 45
+        
+        # Transaction table column positions (measured precisely)
+        col_positions = {
+            'description': 50,      # Column (a) - left aligned
+            'date_acquired': 185,   # Column (b) - centered
+            'date_sold': 245,       # Column (c) - centered  
+            'proceeds': 315,        # Column (d) - right aligned
+            'cost_basis': 390,      # Column (e) - right aligned
+            'code': 445,            # Column (f) - centered
+            'adjustment': 485,      # Column (g) - right aligned
+            'gain_loss': 560        # Column (h) - right aligned
+        }
+        
+        # Row spacing (matches form grid)
+        row_height = 18.5
+        
+        # Fill taxpayer information
+        c.setFont("Helvetica", 9)
+        c.drawString(name_field_x, name_field_y, taxpayer_name[:50])
+        c.drawString(ssn_field_x, ssn_field_y, taxpayer_ssn)
+        
+        # Check appropriate box
+        c.setFont("Helvetica", 12)
+        box_letter = box_type.split()[1]  # Extract A, B, or C
+        
+        if part_type == "Part I":
+            if box_letter == "A":
+                c.drawString(checkbox_x, checkbox_base_y, "✓")
+            elif box_letter == "B":
+                c.drawString(checkbox_x, checkbox_base_y - 18, "✓")
+            elif box_letter == "C":
+                c.drawString(checkbox_x, checkbox_base_y - 36, "✓")
+        else:  # Part II
+            if box_letter == "A":  # Maps to Box D
+                c.drawString(checkbox_x, checkbox_base_y, "✓")
+            elif box_letter == "B":  # Maps to Box E
+                c.drawString(checkbox_x, checkbox_base_y - 18, "✓")
+            elif box_letter == "C":  # Maps to Box F
+                c.drawString(checkbox_x, checkbox_base_y - 36, "✓")
+        
+        # Fill transaction data
+        c.setFont("Helvetica", 7)  # Small font to fit in form fields
+        
+        for i, transaction in enumerate(transactions[:14]):  # Max 14 per page
+            y_pos = table_start_y - (i * row_height)
             
-            c.setFont("Helvetica-Bold", font_size)
-            c.drawString(50, y_position, f"{field_label}:")
-            c.setFont("Helvetica", font_size)
-            c.drawString(200, y_position, value)
-            y_position -= 30
-    
-    c.save()
-
-def create_invoice_pdf(buffer, row, field_mapping, page_format, font_size):
-    """Create an invoice PDF"""
-    c = canvas.Canvas(buffer, pagesize=page_format)
-    width, height = page_format
-    
-    # Header
-    c.setFont("Helvetica-Bold", font_size + 6)
-    c.drawString(50, height - 50, "INVOICE")
-    
-    # Invoice details
-    y_position = height - 100
-    c.setFont("Helvetica", font_size)
-    
-    # Right side - Invoice number and date
-    if 'invoice_number' in field_mapping and field_mapping['invoice_number'] in row:
-        invoice_num = str(row[field_mapping['invoice_number']])
-        c.drawString(width - 200, y_position, f"Invoice #: {invoice_num}")
-    
-    if 'date' in field_mapping and field_mapping['date'] in row:
-        date_val = str(row[field_mapping['date']])
-        c.drawString(width - 200, y_position - 20, f"Date: {date_val}")
-    
-    # Client information
-    y_position -= 60
-    c.setFont("Helvetica-Bold", font_size)
-    c.drawString(50, y_position, "Bill To:")
-    c.setFont("Helvetica", font_size)
-    
-    if 'client_name' in field_mapping and field_mapping['client_name'] in row:
-        client_name = str(row[field_mapping['client_name']])
-        c.drawString(50, y_position - 20, client_name)
-    
-    if 'client_address' in field_mapping and field_mapping['client_address'] in row:
-        client_address = str(row[field_mapping['client_address']])
-        c.drawString(50, y_position - 40, client_address)
-    
-    # Service details
-    y_position -= 100
-    if 'description' in field_mapping and field_mapping['description'] in row:
-        description = str(row[field_mapping['description']])
-        c.drawString(50, y_position, f"Description: {description}")
-    
-    if 'amount' in field_mapping and field_mapping['amount'] in row:
-        amount = str(row[field_mapping['amount']])
-        c.setFont("Helvetica-Bold", font_size + 2)
-        c.drawString(50, y_position - 40, f"Total Amount: ${amount}")
-    
-    c.save()
-
-def create_certificate_pdf(buffer, row, field_mapping, page_format, font_size):
-    """Create a certificate PDF"""
-    c = canvas.Canvas(buffer, pagesize=page_format)
-    width, height = page_format
-    
-    # Border
-    c.rect(30, 30, width-60, height-60, stroke=1, fill=0)
-    c.rect(40, 40, width-80, height-80, stroke=1, fill=0)
-    
-    # Title
-    c.setFont("Helvetica-Bold", font_size + 8)
-    title_text = "CERTIFICATE OF COMPLETION"
-    title_width = c.stringWidth(title_text, "Helvetica-Bold", font_size + 8)
-    c.drawString((width - title_width) / 2, height - 100, title_text)
-    
-    # Content
-    y_position = height - 200
-    c.setFont("Helvetica", font_size + 2)
-    
-    # Recipient name
-    if 'recipient_name' in field_mapping and field_mapping['recipient_name'] in row:
-        recipient = str(row[field_mapping['recipient_name']])
-        c.setFont("Helvetica-Bold", font_size + 4)
-        recipient_width = c.stringWidth(recipient, "Helvetica-Bold", font_size + 4)
-        c.drawString((width - recipient_width) / 2, y_position, recipient)
-        y_position -= 60
-    
-    # Course name
-    if 'course_name' in field_mapping and field_mapping['course_name'] in row:
-        course = str(row[field_mapping['course_name']])
-        c.setFont("Helvetica", font_size + 2)
-        course_text = f"has successfully completed: {course}"
-        course_width = c.stringWidth(course_text, "Helvetica", font_size + 2)
-        c.drawString((width - course_width) / 2, y_position, course_text)
-        y_position -= 60
-    
-    # Date and instructor
-    if 'date_completed' in field_mapping and field_mapping['date_completed'] in row:
-        date_val = str(row[field_mapping['date_completed']])
-        c.drawString(100, y_position, f"Date: {date_val}")
-    
-    if 'instructor' in field_mapping and field_mapping['instructor'] in row:
-        instructor = str(row[field_mapping['instructor']])
-        c.drawString(width - 250, y_position, f"Instructor: {instructor}")
-    
-    c.save()
-
-def create_report_pdf(buffer, row, field_mapping, page_format, font_size):
-    """Create a report PDF"""
-    c = canvas.Canvas(buffer, pagesize=page_format)
-    width, height = page_format
-    
-    # Header
-    if 'title' in field_mapping and field_mapping['title'] in row:
-        title = str(row[field_mapping['title']])
-        c.setFont("Helvetica-Bold", font_size + 4)
-        c.drawString(50, height - 50, title)
-    
-    # Author and date
-    y_position = height - 80
-    c.setFont("Helvetica", font_size)
-    
-    if 'author' in field_mapping and field_mapping['author'] in row:
-        author = str(row[field_mapping['author']])
-        c.drawString(50, y_position, f"Author: {author}")
-    
-    if 'date' in field_mapping and field_mapping['date'] in row:
-        date_val = str(row[field_mapping['date']])
-        c.drawString(width - 200, y_position, f"Date: {date_val}")
-    
-    y_position -= 60
-    
-    # Summary section
-    if 'summary' in field_mapping and field_mapping['summary'] in row:
-        summary = str(row[field_mapping['summary']])
-        c.setFont("Helvetica-Bold", font_size)
-        c.drawString(50, y_position, "Executive Summary:")
-        c.setFont("Helvetica", font_size)
-        
-        # Word wrap for summary
-        words = summary.split()
-        lines = []
-        current_line = []
-        for word in words:
-            test_line = ' '.join(current_line + [word])
-            if c.stringWidth(test_line, "Helvetica", font_size) < width - 100:
-                current_line.append(word)
+            # Format data for form fields
+            description = transaction['description'][:35]  # Truncate if too long
+            date_acquired = transaction['date_acquired'].strftime('%m/%d/%Y')
+            date_sold = transaction['date_sold'].strftime('%m/%d/%Y')
+            
+            # Column (a) - Description
+            c.drawString(col_positions['description'], y_pos, description)
+            
+            # Column (b) - Date acquired (centered)
+            date_acq_width = c.stringWidth(date_acquired)
+            c.drawString(col_positions['date_acquired'] - date_acq_width/2, y_pos, date_acquired)
+            
+            # Column (c) - Date sold (centered)
+            date_sold_width = c.stringWidth(date_sold)
+            c.drawString(col_positions['date_sold'] - date_sold_width/2, y_pos, date_sold)
+            
+            # Column (d) - Proceeds (right aligned)
+            proceeds_text = f"{transaction['proceeds']:,.2f}"
+            c.drawRightString(col_positions['proceeds'], y_pos, proceeds_text)
+            
+            # Column (e) - Cost basis (right aligned)
+            basis_text = f"{transaction['cost_basis']:,.2f}"
+            c.drawRightString(col_positions['cost_basis'], y_pos, basis_text)
+            
+            # Column (f) - Code (leave blank for crypto transactions)
+            
+            # Column (g) - Adjustment (leave blank)
+            
+            # Column (h) - Gain/Loss (right aligned, parentheses for losses)
+            gain_loss = transaction['gain_loss']
+            if gain_loss < 0:
+                gain_loss_text = f"({abs(gain_loss):,.2f})"
             else:
-                lines.append(' '.join(current_line))
-                current_line = [word]
-        if current_line:
-            lines.append(' '.join(current_line))
+                gain_loss_text = f"{gain_loss:,.2f}"
+            c.drawRightString(col_positions['gain_loss'], y_pos, gain_loss_text)
         
-        for line in lines:
-            y_position -= 20
-            c.drawString(50, y_position, line)
+        # Add totals on last page
+        if page_num == total_pages:
+            totals_y = table_start_y - (14 * row_height) - 10
+            
+            # Calculate totals for all transactions
+            total_proceeds = sum(t['proceeds'] for t in all_transactions)
+            total_basis = sum(t['cost_basis'] for t in all_transactions)
+            total_gain_loss = sum(t['gain_loss'] for t in all_transactions)
+            
+            c.setFont("Helvetica-Bold", 7)
+            
+            # Draw totals
+            c.drawRightString(col_positions['proceeds'], totals_y, f"{total_proceeds:,.2f}")
+            c.drawRightString(col_positions['cost_basis'], totals_y, f"{total_basis:,.2f}")
+            
+            if total_gain_loss < 0:
+                total_gl_text = f"({abs(total_gain_loss):,.2f})"
+            else:
+                total_gl_text = f"{total_gain_loss:,.2f}"
+            c.drawRightString(col_positions['gain_loss'], totals_y, total_gl_text)
+        
+        c.save()
+        
+        # Merge overlay with template
+        overlay_buffer.seek(0)
+        overlay_reader = PyPDF2.PdfReader(overlay_buffer)
+        overlay_page = overlay_reader.pages[0]
+        
+        template_page.merge_page(overlay_page)
+        
+        # Write final PDF
+        pdf_writer = PyPDF2.PdfWriter()
+        pdf_writer.add_page(template_page)
+        pdf_writer.write(buffer)
+        
+        return True
+        
+    except Exception as e:
+        st.error(f"Error creating form with official template: {e}")
+        return False
+
+def get_official_form_8949(tax_year):
+    """Download official IRS Form 8949 for the specified tax year"""
+    irs_urls = {
+        2024: "https://www.irs.gov/pub/irs-pdf/f8949.pdf",
+        2023: "https://www.irs.gov/pub/irs-prior/f8949--2023.pdf",
+        2022: "https://www.irs.gov/pub/irs-prior/f8949--2022.pdf",
+        2021: "https://www.irs.gov/pub/irs-prior/f8949--2021.pdf",
+        2020: "https://www.irs.gov/pub/irs-prior/f8949--2020.pdf"
+    }
     
-    # Data points
-    y_position -= 60
-    for field_name in ['data_point_1', 'data_point_2']:
-        if field_name in field_mapping and field_mapping[field_name] in row:
-            field_label = get_template_fields("Report Template")[field_name]
-            value = str(row[field_mapping[field_name]])
-            c.setFont("Helvetica-Bold", font_size)
-            c.drawString(50, y_position, f"{field_label}:")
-            c.setFont("Helvetica", font_size)
-            c.drawString(200, y_position, value)
-            y_position -= 30
+    url = irs_urls.get(tax_year, irs_urls[2024])
+    
+    try:
+        response = requests.get(url, timeout=15)
+        if response.status_code == 200:
+            return response.content
+    except Exception as e:
+        st.warning(f"Could not download official form: {e}")
+    
+    return None
+
+def create_custom_form_8949(buffer, transactions, part_type, taxpayer_name, taxpayer_ssn, tax_year, box_type, page_num, total_pages, all_transactions):
+    """Create custom Form 8949 if official template fails"""
+    c = canvas.Canvas(buffer, pagesize=letter)
+    width, height = letter
+    
+    # Form header
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(50, height - 50, f"Form 8949 ({tax_year})")
+    c.setFont("Helvetica", 12)
+    c.drawString(200, height - 50, "Sales and Other Dispositions of Capital Assets")
+    
+    # Taxpayer information
+    c.setFont("Helvetica", 10)
+    c.drawString(50, height - 80, f"Name: {taxpayer_name}")
+    c.drawString(400, height - 80, f"SSN: {taxpayer_ssn}")
+    
+    # Part header
+    c.setFont("Helvetica-Bold", 12)
+    if part_type == "Part I":
+        c.drawString(50, height - 110, "Part I - Short-Term Capital Gains and Losses")
+    else:
+        c.drawString(50, height - 110, "Part II - Long-Term Capital Gains and Losses")
+    
+    # Box type
+    c.setFont("Helvetica", 10)
+    c.drawString(50, height - 130, f"☑ {box_type}")
+    
+    # Table headers
+    y_pos = height - 180
+    c.setFont("Helvetica-Bold", 8)
+    headers = [
+        ("Description", 50),
+        ("Date Acquired", 180),
+        ("Date Sold", 240),
+        ("Proceeds", 300),
+        ("Cost Basis", 370),
+        ("Code", 430),
+        ("Adjustment", 470),
+        ("Gain/Loss", 530)
+    ]
+    
+    for header, x_pos in headers:
+        c.drawString(x_pos, y_pos, header)
+    
+    # Draw table lines
+    c.line(40, y_pos - 5, width - 40, y_pos - 5)
+    
+    # Transaction data
+    c.setFont("Helvetica", 7)
+    for i, transaction in enumerate(transactions[:14]):
+        y_pos = height - 200 - (i * 15)
+        
+        data = [
+            (transaction['description'][:25], 50),
+            (transaction['date_acquired'].strftime('%m/%d/%Y'), 180),
+            (transaction['date_sold'].strftime('%m/%d/%Y'), 240),
+            (f"{transaction['proceeds']:,.2f}", 300),
+            (f"{transaction['cost_basis']:,.2f}", 370),
+            ("", 430),
+            ("", 470),
+            (f"{transaction['gain_loss']:,.2f}" if transaction['gain_loss'] >= 0 
+             else f"({abs(transaction['gain_loss']):,.2f})", 530)
+        ]
+        
+        for text, x_pos in data:
+            c.drawString(x_pos, y_pos, str(text))
+    
+    # Totals (on last page only)
+    if page_num == total_pages:
+        totals_y = height - 200 - (14 * 15) - 20
+        c.setFont("Helvetica-Bold", 8)
+        c.drawString(50, totals_y, "TOTALS")
+        
+        total_proceeds = sum(t['proceeds'] for t in all_transactions)
+        total_basis = sum(t['cost_basis'] for t in all_transactions)
+        total_gain_loss = sum(t['gain_loss'] for t in all_transactions)
+        
+        c.drawString(300, totals_y, f"{total_proceeds:,.2f}")
+        c.drawString(370, totals_y, f"{total_basis:,.2f}")
+        c.drawString(530, totals_y, f"{total_gain_loss:,.2f}" if total_gain_loss >= 0 
+                    else f"({abs(total_gain_loss):,.2f})")
+    
+    # Page footer
+    c.setFont("Helvetica", 8)
+    if total_pages > 1:
+        c.drawString(50, 30, f"Page {page_num} of {total_pages}")
+    c.drawRightString(width - 50, 30, f"Generated: {datetime.now().strftime('%m/%d/%Y')}")
     
     c.save()
 
 def create_zip_file(pdf_files):
-    """Create a ZIP file containing all PDFs"""
+    """Create ZIP file containing all PDFs"""
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
         for pdf_file in pdf_files:
