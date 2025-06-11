@@ -15,7 +15,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 def main():
     """Main Streamlit application for Form 8949 generation"""
     st.set_page_config(
-        page_title="Professional Form 8949 Generator",
+        page_title="Form 8949 Generator",
         page_icon="📋",
         layout="wide"
     )
@@ -376,9 +376,9 @@ def create_form_with_official_template(buffer, transactions, part_type, taxpayer
         if part_type == "Part I":
             # Part I (Page 1) positioning
             name_field_x = 75
-            name_field_y = 695           # Page 1 name height
+            name_field_y = 690           # Page 1 name height
             ssn_field_x = 550
-            ssn_field_y = 695            # Page 1 SSN height
+            ssn_field_y = 690            # Page 1 SSN height
             checkbox_base_y = 552        # Part I checkbox start at height 105
             table_start_y = 425          # Part I table start at height 200
         else:  # Part II
