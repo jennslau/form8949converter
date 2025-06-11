@@ -320,7 +320,6 @@ def process_bitwave_transactions(df):
     
     for _, row in sell_actions.iterrows():
         try:
-        try:
             # Extract and validate dates with better error handling
             try:
                 # Handle the timestamp conversion more robustly
