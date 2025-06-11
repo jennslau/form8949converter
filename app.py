@@ -57,7 +57,7 @@ def main():
     st.markdown("""
     <div class="main-header">
         <h1>📋 Bitwave Form 8949 Generator</h1>
-        <p>Convert your Bitwave actions CSV to official IRS Form 8949</p>
+        <p>This tool helps you convert your Bitwave actions report (csv file) and populates an official IRS Form 8949</p>
     </div>
     """, unsafe_allow_html=True)
     
