@@ -67,7 +67,8 @@ def main():
         st.markdown("""
         ### Required Bitwave CSV Columns:
         - **action**: Transaction type ('sell' transactions will be processed)
-        - **asset**: Cryptocurrency symbol (e.g., "BTC", "ETH")
+        - **asset**: Cryptocurrency symbol (e.g., "BTC", "ETH", "HNT")
+        - **assetUnitAdj**: Amount of cryptocurrency sold (used for description)
         - **timestampSEC**: Sale date as Unix timestamp in seconds
         - **lotId**: Unique lot identifier for matching acquisitions
         - **lotAcquisitionTimestampSEC**: Acquisition timestamp in seconds
@@ -151,7 +152,7 @@ def main():
             
             # Validate required columns for Bitwave format
             required_bitwave_columns = [
-                'action', 'asset', 'timestampSEC', 'lotId', 'lotAcquisitionTimestampSEC',
+                'action', 'asset', 'assetUnitAdj', 'timestampSEC', 'lotId', 'lotAcquisitionTimestampSEC',
                 ' proceeds ', ' costBasisRelieved ', ' shortTermGainLoss ', ' longTermGainLoss '
             ]
             missing_columns = [col for col in required_bitwave_columns if col not in df.columns]
@@ -413,7 +414,7 @@ def process_bitwave_transactions(df, tax_year):
             
             # Create transaction record
             transaction = {
-                'description': f"{row['asset']} cryptocurrency",  # Format for IRS Form 8949
+                'description': f"{abs(row['assetUnitAdj']):.8f} {row['asset']}".rstrip('0').rstrip('.'),  # Format: "22 HNT"
                 'date_acquired': date_acquired,
                 'date_sold': date_sold,
                 'proceeds': proceeds,
