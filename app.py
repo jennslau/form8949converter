@@ -376,11 +376,11 @@ def create_form_with_official_template(buffer, transactions, part_type, taxpayer
         if part_type == "Part I":
             # Part I (Page 1) positioning
             name_field_x = 75
-            name_field_y = 50           # Page 1 name height
+            name_field_y = 725           # Page 1 name height
             ssn_field_x = 550
-            ssn_field_y = 50            # Page 1 SSN height
-            checkbox_base_y = 650        # Part I checkbox start at height 105
-            table_start_y = 500          # Part I table start at height 200
+            ssn_field_y = 725            # Page 1 SSN height
+            checkbox_base_y = 587        # Part I checkbox start at height 105
+            table_start_y = 465          # Part I table start at height 200
         else:  # Part II
             # Part II (Page 2) positioning
             name_field_x = 75
