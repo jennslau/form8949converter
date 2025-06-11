@@ -296,12 +296,31 @@ def process_bitwave_transactions(df):
     
     st.info(f"Processing {len(sell_actions)} sell transactions from Bitwave actions report...")
     
+    processed_count = 0
+    error_count = 0
+    
     for _, row in sell_actions.iterrows():
         try:
-            # Extract dates
-            date_sold = pd.to_datetime(row['timestamp'])
-            # Convert acquisition timestamp from seconds to datetime
-            date_acquired = pd.to_datetime(row['lotAcquisitionTimestampSEC'], unit='s')
+            # Extract and validate dates with better error handling
+            try:
+                date_sold = pd.to_datetime(row['timestamp'])
+                if pd.isna(date_sold):
+                    raise ValueError("Invalid sale date")
+            except:
+                validation_warnings.append(f"Invalid sale timestamp for row {row.get('txnId', 'unknown')}")
+                error_count += 1
+                continue
+            
+            try:
+                # Convert acquisition timestamp from seconds to datetime
+                lot_acq_timestamp = row['lotAcquisitionTimestampSEC']
+                if pd.isna(lot_acq_timestamp) or lot_acq_timestamp == 0:
+                    raise ValueError("Invalid acquisition timestamp")
+                date_acquired = pd.to_datetime(int(lot_acq_timestamp), unit='s')
+            except:
+                validation_warnings.append(f"Invalid acquisition timestamp for row {row.get('txnId', 'unknown')}")
+                error_count += 1
+                continue
             
             # Calculate holding period
             holding_days = (date_sold - date_acquired).days
@@ -309,6 +328,12 @@ def process_bitwave_transactions(df):
             # Clean and parse monetary values from Bitwave format
             proceeds = clean_bitwave_currency_value(row[' proceeds '])
             cost_basis = clean_bitwave_currency_value(row[' costBasisRelieved '])
+            
+            # Skip transactions with zero proceeds and cost basis (likely data errors)
+            if proceeds == 0 and cost_basis == 0:
+                validation_warnings.append(f"Skipping transaction with zero proceeds and cost basis: {row.get('txnId', 'unknown')}")
+                error_count += 1
+                continue
             
             # Get gain/loss from Bitwave's calculations
             short_term_gl = clean_bitwave_currency_value(row[' shortTermGainLoss '])
@@ -327,7 +352,7 @@ def process_bitwave_transactions(df):
                 bitwave_gain_loss = short_term_gl + long_term_gl
                 if short_term_gl != 0 and long_term_gl != 0:
                     validation_warnings.append(
-                        f"Transaction {row['txnId']}: Both short and long-term gains reported. Using holding period calculation."
+                        f"Transaction {row.get('txnId', 'unknown')}: Both short and long-term gains reported. Using combined total."
                     )
             
             # Calculate gain/loss and validate against Bitwave
@@ -351,14 +376,22 @@ def process_bitwave_transactions(df):
                 'is_short_term': is_short_term,
                 'holding_days': holding_days,
                 'lot_id': row['lotId'],
-                'txn_id': row['txnId']
+                'txn_id': row.get('txnId', 'unknown')
             }
             
             transactions.append(transaction)
+            processed_count += 1
             
         except Exception as e:
-            validation_warnings.append(f"Skipping invalid row {row.get('txnId', 'unknown')}: {e}")
+            error_count += 1
+            validation_warnings.append(f"Error processing row {row.get('txnId', 'unknown')}: {str(e)}")
             continue
+    
+    # Add summary information
+    if processed_count > 0:
+        st.success(f"✅ Successfully processed {processed_count} transactions")
+    if error_count > 0:
+        st.warning(f"⚠️ Skipped {error_count} transactions due to data issues")
     
     return transactions, validation_warnings
 
