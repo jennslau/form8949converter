@@ -370,9 +370,9 @@ def create_form_with_official_template(buffer, transactions, part_type, taxpayer
         c = canvas.Canvas(overlay_buffer, pagesize=letter)
         width, height = letter
         
-        # PRECISELY MEASURED COORDINATES - Based on actual IRS Form 8949 structure
+        # CORRECTED COORDINATES - Position first transaction below column headers
         
-        # Taxpayer information fields (header boxes) - CORRECTED POSITIONING
+        # Taxpayer information fields (header boxes)
         name_field_x = 75       # Left edge of name field box
         name_field_y = height - 155
         ssn_field_x = 550       # Right-aligned in SSN field box  
@@ -381,15 +381,15 @@ def create_form_with_official_template(buffer, transactions, part_type, taxpayer
         # Checkbox positions - measured from actual form
         if part_type == "Part I":
             checkbox_base_y = height - 427   # Part I checkboxes (A, B, C)
-            # CRITICAL FIX: Move table start DOWN to actual first data row
-            table_start_y = height - 595     # First transaction row (after headers)
+            # CRITICAL FIX: Move table start DOWN to first data row below headers
+            table_start_y = height - 650     # First transaction in first data row
         else:
             checkbox_base_y = height - 350   # Part II checkboxes (D, E, F) 
-            table_start_y = height - 595     # Same position for Part II
+            table_start_y = height - 650     # Same position for Part II
         
         checkbox_x = 45
         
-        # RECALIBRATED column positions - measured to fit within exact form boundaries
+        # Column positions - aligned with form structure
         col_positions = {
             'description': 50,      # Column (a) - fits within narrow left column
             'date_acquired': 195,   # Column (b) - centered in date column
@@ -401,10 +401,10 @@ def create_form_with_official_template(buffer, transactions, part_type, taxpayer
             'gain_loss': 565        # Column (h) - right-aligned in gain/loss column
         }
         
-        # INCREASED row spacing to match actual form row height
-        row_height = 19.5  # Measured spacing between form table rows
+        # CORRECTED row spacing to match form's ruled line spacing
+        row_height = 23.0  # Matches distance between horizontal ruled lines
         
-        # Fill taxpayer information with corrected positioning
+        # Fill taxpayer information
         c.setFont("Helvetica", 10)
         c.drawString(name_field_x, name_field_y, taxpayer_name[:40])
         c.drawRightString(ssn_field_x, ssn_field_y, taxpayer_ssn)
@@ -428,10 +428,10 @@ def create_form_with_official_template(buffer, transactions, part_type, taxpayer
             elif box_letter == "C":  # Maps to Box F for long-term
                 c.drawString(checkbox_x, checkbox_base_y - 40, "✓")
         
-        # REDUCED font size to fit cleanly within cells
-        c.setFont("Helvetica", 5.5)  # Smaller font for clean cell fit
+        # Font size for clean cell fit
+        c.setFont("Helvetica", 5.5)
         
-        # Fill transaction data with precise alignment and text width checking
+        # Fill transaction data with precise alignment
         for i, transaction in enumerate(transactions[:14]):  # Maximum 14 transactions per page
             y_pos = table_start_y - (i * row_height)
             
@@ -453,14 +453,12 @@ def create_form_with_official_template(buffer, transactions, part_type, taxpayer
             
             # Column (d) - Proceeds: Right-aligned within column boundaries
             proceeds_text = f"{transaction['proceeds']:,.2f}"
-            # Check width and truncate if necessary
             if c.stringWidth(proceeds_text) > 65:  # Column width limit
                 proceeds_text = f"{transaction['proceeds']:,.0f}"
             c.drawRightString(col_positions['proceeds'], y_pos, proceeds_text)
             
             # Column (e) - Cost basis: Right-aligned within column boundaries
             basis_text = f"{transaction['cost_basis']:,.2f}"
-            # Check width and truncate if necessary
             if c.stringWidth(basis_text) > 65:  # Column width limit
                 basis_text = f"{transaction['cost_basis']:,.0f}"
             c.drawRightString(col_positions['cost_basis'], y_pos, basis_text)
