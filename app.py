@@ -347,7 +347,7 @@ def generate_form_8949_pages(transactions, part_type, taxpayer_name, taxpayer_ss
     return pdf_files
 
 def create_form_with_official_template(buffer, transactions, part_type, taxpayer_name, taxpayer_ssn, tax_year, box_type, page_num, total_pages, all_transactions):
-    """Create Form 8949 using official IRS template with PERFECT alignment to form table structure"""
+    """Create Form 8949 using official IRS template with CUSTOM coordinates for perfect alignment"""
     try:
         # Get official IRS Form 8949 PDF
         official_pdf = get_official_form_8949(tax_year)
@@ -370,38 +370,41 @@ def create_form_with_official_template(buffer, transactions, part_type, taxpayer
         c = canvas.Canvas(overlay_buffer, pagesize=letter)
         width, height = letter
         
-        # CORRECTED COORDINATES - Position first transaction below column headers
+        # CUSTOM COORDINATES per your specifications
         
-        # Taxpayer information fields (header boxes)
-        name_field_x = 75       # Left edge of name field box
-        name_field_y = height - 105
-        ssn_field_x = 550       # Right-aligned in SSN field box  
-        ssn_field_y = height - 105
-        
-        # Checkbox positions - measured from actual form
+        # CUSTOM taxpayer information and positioning for different pages
         if part_type == "Part I":
-            checkbox_base_y = height - 250   # Part I checkboxes (A, B, C)
-            # CRITICAL FIX: Move table start DOWN to first data row below headers
-            table_start_y = height - 360     # First transaction in first data row
-        else:
-            checkbox_base_y = height - 250   # Part II checkboxes (D, E, F) 
-            table_start_y = height - 360     # Same position for Part II
+            # Part I (Page 1) positioning
+            name_field_x = 75
+            name_field_y = 105           # Page 1 name height
+            ssn_field_x = 550
+            ssn_field_y = 105            # Page 1 SSN height
+            checkbox_base_y = 250        # Part I checkbox start at height 250
+            table_start_y = 360          # Part I table start at height 360
+        else:  # Part II
+            # Part II (Page 2) positioning
+            name_field_x = 75
+            name_field_y = 95            # Page 2 name height
+            ssn_field_x = 550
+            ssn_field_y = 95             # Page 2 SSN height
+            checkbox_base_y = 200        # Part II checkbox start at height 200
+            table_start_y = 300          # Part II table start at height 300
         
-        checkbox_x = 50
+        checkbox_x = 45
         
         # Column positions - aligned with form structure
         col_positions = {
             'description': 50,      # Column (a) - fits within narrow left column
             'date_acquired': 195,   # Column (b) - centered in date column
             'date_sold': 260,       # Column (c) - centered in date column
-            'proceeds': 335,        # Column (d) - right-aligned within proceeds column
-            'cost_basis': 400,      # Column (e) - right-aligned within basis column  
+            'proceeds': 340,        # Column (d) - right-aligned within proceeds column
+            'cost_basis': 415,      # Column (e) - right-aligned within basis column  
             'code': 455,            # Column (f) - centered in code column
             'adjustment': 495,      # Column (g) - right-aligned in adjustment column
             'gain_loss': 565        # Column (h) - right-aligned in gain/loss column
         }
         
-        # CORRECTED row spacing to match form's ruled line spacing
+        # Row spacing to match form's ruled line spacing
         row_height = 23.0  # Matches distance between horizontal ruled lines
         
         # Fill taxpayer information
