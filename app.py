@@ -380,12 +380,12 @@ def create_form_with_official_template(buffer, transactions, part_type, taxpayer
         
         # Checkbox positions - measured from actual form
         if part_type == "Part I":
-            checkbox_base_y = height - 290   # Part I checkboxes (A, B, C)
+            checkbox_base_y = height - 260   # Part I checkboxes (A, B, C)
             # CRITICAL FIX: Move table start DOWN to first data row below headers
-            table_start_y = height - 345     # First transaction in first data row
+            table_start_y = height - 355     # First transaction in first data row
         else:
-            checkbox_base_y = height - 290   # Part II checkboxes (D, E, F) 
-            table_start_y = height - 345     # Same position for Part II
+            checkbox_base_y = height - 260   # Part II checkboxes (D, E, F) 
+            table_start_y = height - 355     # Same position for Part II
         
         checkbox_x = 50
         
