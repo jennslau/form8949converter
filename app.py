@@ -50,7 +50,7 @@ def main():
     # Header
     st.markdown("""
     <div class="main-header">
-        <h1>📋 Professional Form 8949 Generator</h1>
+        <h1>📋 IRS Form 8949 Generator</h1>
         <p>Convert your cryptocurrency transactions to official IRS Form 8949</p>
     </div>
     """, unsafe_allow_html=True)
@@ -169,7 +169,7 @@ def main():
                     st.error("⚠️ Please enter taxpayer name and SSN before generating forms.")
                     return
                 
-                with st.spinner("Generating professional Form 8949 PDFs..."):
+                with st.spinner("Generating official Form 8949 PDFs..."):
                     pdf_files = generate_all_forms(
                         short_term, 
                         long_term, 
