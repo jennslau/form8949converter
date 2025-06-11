@@ -164,8 +164,22 @@ def main():
             # Process Bitwave transactions
             transactions, validation_warnings = process_bitwave_transactions(df)
             
+            # Enhanced debugging information
+            sell_count = len(df[df['action'] == 'sell'])
+            buy_count = len(df[df['action'] == 'buy'])
+            
+            st.info(f"📊 Bitwave Data Summary:")
+            st.write(f"• Total actions in report: {len(df)}")
+            st.write(f"• Sell actions found: {sell_count}")
+            st.write(f"• Buy actions found: {buy_count}")
+            st.write(f"• Valid transactions processed: {len(transactions)}")
+            
             if not transactions:
-                st.error("❌ No valid sell transactions found in the Bitwave actions report.")
+                st.error("❌ No valid sell transactions could be processed from the Bitwave actions report.")
+                if sell_count > 0:
+                    st.error(f"⚠️ Found {sell_count} sell actions but none could be processed. Check validation warnings above.")
+                else:
+                    st.error("⚠️ No sell actions found in the CSV. Please ensure this is a complete Bitwave actions report.")
                 return
             
             # Display validation warnings if any
