@@ -376,10 +376,10 @@ def create_form_with_official_template(buffer, transactions, part_type, taxpayer
         if part_type == "Part I":
             # Part I (Page 1) positioning
             name_field_x = 75
-            name_field_y = 655           # Page 1 name height
+            name_field_y = 670           # Page 1 name height
             ssn_field_x = 550
-            ssn_field_y = 655            # Page 1 SSN height
-            checkbox_base_y = 547        # Part I checkbox start at height 105
+            ssn_field_y = 670            # Page 1 SSN height
+            checkbox_base_y = 550        # Part I checkbox start at height 105
             table_start_y = 425          # Part I table start at height 200
         else:  # Part II
             # Part II (Page 2) positioning
@@ -405,7 +405,7 @@ def create_form_with_official_template(buffer, transactions, part_type, taxpayer
         }
         
         # Row spacing to match form's ruled line spacing
-        row_height = 23.0  # Matches distance between horizontal ruled lines
+        row_height = 24.0  # Matches distance between horizontal ruled lines
         
         # Fill taxpayer information
         c.setFont("Helvetica", 10)
