@@ -13,9 +13,9 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
 def main():
-    """Main Streamlit application for Form 8949 generation"""
+    """Main Streamlit application for Form 8949 generation from Bitwave actions reports"""
     st.set_page_config(
-        page_title="Form 8949 Generator",
+        page_title="Form 8949 Generator - Bitwave Edition",
         page_icon="📋",
         layout="wide"
     )
@@ -44,6 +44,12 @@ def main():
         padding: 1rem;
         margin: 1rem 0;
     }
+    .warning-box {
+        background-color: #fff3cd;
+        border-left: 4px solid #ffc107;
+        padding: 1rem;
+        margin: 1rem 0;
+    }
     </style>
     """, unsafe_allow_html=True)
     
@@ -51,27 +57,39 @@ def main():
     st.markdown("""
     <div class="main-header">
         <h1>📋 IRS Form 8949 Generator</h1>
-        <p>Convert your Bitwave actions report to official IRS Form 8949</p>
+        <p><strong>Bitwave Actions Report Edition</strong></p>
+        <p>Convert your Bitwave actions CSV export to official IRS Form 8949</p>
     </div>
     """, unsafe_allow_html=True)
     
     # Instructions
-    with st.expander("📖 Instructions & Requirements", expanded=False):
+    with st.expander("📖 Instructions & Bitwave Requirements", expanded=False):
         st.markdown("""
-        ### Required CSV Columns:
-        - **Description**: Asset description (e.g., "BTC cryptocurrency")
-        - **Date Acquired**: Purchase date (MM/DD/YYYY)
-        - **Date Sold**: Sale date (MM/DD/YYYY)
-        - **Proceeds**: Sale amount (column d)
-        - **Cost Basis**: Purchase cost (column e)
-        - **Gain/Loss**: Calculated gain or loss (column h)
+        ### Required Bitwave CSV Columns:
+        - **action**: Transaction type ('sell' transactions will be processed)
+        - **asset**: Cryptocurrency symbol (e.g., "BTC", "ETH")
+        - **timestamp**: Sale date in ISO format
+        - **lotId**: Unique lot identifier for matching acquisitions
+        - **lotAcquisitionTimestampSEC**: Acquisition timestamp in seconds
+        - **` proceeds `**: Sale proceeds (note: column has spaces)
+        - **` costBasisRelieved `**: Cost basis of sold assets
+        - **` shortTermGainLoss `**: Short-term gain/loss from Bitwave
+        - **` longTermGainLoss `**: Long-term gain/loss from Bitwave
+        
+        ### How to Export from Bitwave:
+        1. Log into your Bitwave account
+        2. Navigate to Reports → Actions Report
+        3. Select your desired date range
+        4. Export as CSV format
+        5. Upload the CSV file below
         
         ### Features:
-        - ✅ Maps directly to official IRS Form 8949 fields
-        - ✅ Automatically handles multiple pages (14 transactions per page)
-        - ✅ Separates short-term and long-term transactions
-        - ✅ Applies taxpayer information to all pages
-        - ✅ Professional PDF output ready for IRS submission
+        - ✅ Automatically filters 'sell' actions from your Bitwave export
+        - ✅ Maps lot IDs to determine accurate acquisition dates
+        - ✅ Uses Bitwave's short/long-term classification for accuracy
+        - ✅ Validates calculated gains against Bitwave's calculations
+        - ✅ Generates official IRS Form 8949 with precise field mapping
+        - ✅ Handles multiple pages and cryptocurrencies
         """)
     
     # Taxpayer Information Section
@@ -108,60 +126,111 @@ def main():
                 "Box A - Basis reported to IRS", 
                 "Box C - Various situations"
             ],
-            index=0
+            index=0,
+            help="For crypto transactions, Box B is typically correct as exchanges rarely report basis to IRS"
         )
     
     # File Upload Section
-    st.markdown('<h2 class="section-header">📁 Upload Transaction Data</h2>', unsafe_allow_html=True)
+    st.markdown('<h2 class="section-header">📁 Upload Bitwave Actions Report</h2>', unsafe_allow_html=True)
     
     uploaded_file = st.file_uploader(
-        "Choose CSV file with your Bitwave actions report data",
+        "Choose your Bitwave actions CSV export",
         type=['csv'],
-        help="Upload a CSV file with your Bitwave actions report data"
+        help="Upload the CSV file exported from Bitwave's Actions Report"
     )
     
     if uploaded_file is not None:
         try:
             # Read and validate CSV
             df = pd.read_csv(uploaded_file)
-            st.success(f"✅ File uploaded successfully! Found {len(df)} transactions.")
+            st.success(f"✅ Bitwave actions report uploaded successfully! Found {len(df)} total actions.")
             
             # Display preview
             with st.expander("📊 Data Preview", expanded=True):
                 st.dataframe(df.head(10))
             
-            # Validate required columns
-            required_columns = ['Description', 'Date Acquired', 'Date Sold', 'Proceeds', 'Cost Basis', 'Gain/Loss']
-            missing_columns = [col for col in required_columns if col not in df.columns]
+            # Validate required columns for Bitwave format
+            required_bitwave_columns = [
+                'action', 'asset', 'timestamp', 'lotId', 'lotAcquisitionTimestampSEC',
+                ' proceeds ', ' costBasisRelieved ', ' shortTermGainLoss ', ' longTermGainLoss '
+            ]
+            missing_columns = [col for col in required_bitwave_columns if col not in df.columns]
             
             if missing_columns:
-                st.error(f"❌ Missing required columns: {', '.join(missing_columns)}")
-                st.info("Please ensure your CSV has all required columns with exact names.")
+                st.error(f"❌ Missing required Bitwave columns: {', '.join(missing_columns)}")
+                st.info("Please ensure you've uploaded a complete Bitwave actions report CSV.")
                 return
             
-            # Process transactions
-            transactions = process_transactions(df)
+            # Process Bitwave transactions
+            transactions, validation_warnings = process_bitwave_transactions(df)
             
             if not transactions:
-                st.error("❌ No valid transactions found in the uploaded file.")
+                st.error("❌ No valid sell transactions found in the Bitwave actions report.")
                 return
             
-            # Separate short-term and long-term
-            short_term, long_term = separate_transactions_by_term(transactions)
+            # Display validation warnings if any
+            if validation_warnings:
+                with st.expander("⚠️ Validation Warnings", expanded=True):
+                    st.markdown('<div class="warning-box">', unsafe_allow_html=True)
+                    for warning in validation_warnings:
+                        st.warning(warning)
+                    st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Separate short-term and long-term using Bitwave's classification
+            short_term, long_term = separate_bitwave_transactions_by_term(transactions)
             
             # Display summary
             st.markdown('<h2 class="section-header">📈 Transaction Summary</h2>', unsafe_allow_html=True)
             
-            col1, col2, col3, col4 = st.columns(4)
+            total_actions = len(df)
+            sell_actions = len(df[df['action'] == 'sell'])
+            buy_actions = len(df[df['action'] == 'buy'])
+            
+            col1, col2, col3, col4, col5 = st.columns(5)
             with col1:
-                st.metric("Total Transactions", len(transactions))
+                st.metric("Total Actions", total_actions)
             with col2:
-                st.metric("Short-term", len(short_term))
+                st.metric("Sell Actions", sell_actions)
             with col3:
-                st.metric("Long-term", len(long_term))
+                st.metric("Valid Transactions", len(transactions))
             with col4:
+                st.metric("Short-term", len(short_term))
+            with col5:
+                st.metric("Long-term", len(long_term))
+            
+            # Net gain/loss summary
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                total_proceeds = sum(t['proceeds'] for t in transactions)
+                st.metric("Total Proceeds", f"${total_proceeds:,.2f}")
+            with col2:
+                total_basis = sum(t['cost_basis'] for t in transactions)
+                st.metric("Total Cost Basis", f"${total_basis:,.2f}")
+            with col3:
                 total_gain_loss = sum(t['gain_loss'] for t in transactions)
                 st.metric("Net Gain/Loss", f"${total_gain_loss:,.2f}")
+            
+            # Asset breakdown
+            with st.expander("💰 Asset Breakdown", expanded=False):
+                asset_summary = {}
+                for transaction in transactions:
+                    asset = transaction['description']
+                    if asset not in asset_summary:
+                        asset_summary[asset] = {'count': 0, 'proceeds': 0, 'gain_loss': 0}
+                    asset_summary[asset]['count'] += 1
+                    asset_summary[asset]['proceeds'] += transaction['proceeds']
+                    asset_summary[asset]['gain_loss'] += transaction['gain_loss']
+                
+                summary_df = pd.DataFrame([
+                    {
+                        'Asset': asset,
+                        'Transactions': data['count'],
+                        'Total Proceeds': f"${data['proceeds']:,.2f}",
+                        'Net Gain/Loss': f"${data['gain_loss']:,.2f}"
+                    }
+                    for asset, data in asset_summary.items()
+                ])
+                st.dataframe(summary_df, use_container_width=True)
             
             # Generate Forms
             if st.button("🚀 Generate Form 8949 PDFs", type="primary"):
@@ -169,7 +238,7 @@ def main():
                     st.error("⚠️ Please enter taxpayer name and SSN before generating forms.")
                     return
                 
-                with st.spinner("Generating official Form 8949 PDFs..."):
+                with st.spinner("Generating official Form 8949 PDFs from Bitwave data..."):
                     pdf_files = generate_all_forms(
                         short_term, 
                         long_term, 
@@ -194,71 +263,124 @@ def main():
                         st.download_button(
                             label="📦 Download All Forms (ZIP)",
                             data=zip_data,
-                            file_name=f"Form_8949_{tax_year}_Complete.zip",
+                            file_name=f"Form_8949_{tax_year}_Bitwave_Complete.zip",
                             mime="application/zip"
                         )
                     
-                    st.success(f"✅ Generated {len(pdf_files)} Form 8949 PDF(s) successfully!")
+                    st.success(f"✅ Generated {len(pdf_files)} Form 8949 PDF(s) successfully from Bitwave data!")
+                    
+                    # Show summary of what was generated
+                    if short_term:
+                        st.info(f"📄 Part I (Short-term): {len(short_term)} transactions")
+                    if long_term:
+                        st.info(f"📄 Part II (Long-term): {len(long_term)} transactions")
+                        
                 else:
                     st.error("❌ Failed to generate PDF files. Please check your data and try again.")
         
         except Exception as e:
-            st.error(f"❌ Error processing file: {str(e)}")
+            st.error(f"❌ Error processing Bitwave actions report: {str(e)}")
+            st.info("Please ensure you've uploaded a valid Bitwave actions CSV export.")
 
-def process_transactions(df):
-    """Process CSV data into standardized transaction format"""
+def process_bitwave_transactions(df):
+    """Process Bitwave actions report into standardized transaction format"""
     transactions = []
+    validation_warnings = []
     
-    for _, row in df.iterrows():
+    # Filter for sell actions only
+    sell_actions = df[df['action'] == 'sell'].copy()
+    
+    if len(sell_actions) == 0:
+        validation_warnings.append("No 'sell' actions found in the Bitwave report.")
+        return transactions, validation_warnings
+    
+    st.info(f"Processing {len(sell_actions)} sell transactions from Bitwave actions report...")
+    
+    for _, row in sell_actions.iterrows():
         try:
-            # Parse dates
-            date_acquired = pd.to_datetime(row['Date Acquired'])
-            date_sold = pd.to_datetime(row['Date Sold'])
+            # Extract dates
+            date_sold = pd.to_datetime(row['timestamp'])
+            # Convert acquisition timestamp from seconds to datetime
+            date_acquired = pd.to_datetime(row['lotAcquisitionTimestampSEC'], unit='s')
             
             # Calculate holding period
             holding_days = (date_sold - date_acquired).days
-            is_short_term = holding_days <= 365
             
-            # Clean monetary values
-            proceeds = clean_currency_value(row['Proceeds'])
-            cost_basis = clean_currency_value(row['Cost Basis'])
-            gain_loss = clean_currency_value(row['Gain/Loss'])
+            # Clean and parse monetary values from Bitwave format
+            proceeds = clean_bitwave_currency_value(row[' proceeds '])
+            cost_basis = clean_bitwave_currency_value(row[' costBasisRelieved '])
+            
+            # Get gain/loss from Bitwave's calculations
+            short_term_gl = clean_bitwave_currency_value(row[' shortTermGainLoss '])
+            long_term_gl = clean_bitwave_currency_value(row[' longTermGainLoss '])
+            
+            # Determine if short-term or long-term based on Bitwave's classification
+            if short_term_gl != 0 and long_term_gl == 0:
+                is_short_term = True
+                bitwave_gain_loss = short_term_gl
+            elif long_term_gl != 0 and short_term_gl == 0:
+                is_short_term = False
+                bitwave_gain_loss = long_term_gl
+            else:
+                # Fallback to holding period calculation if Bitwave classification is unclear
+                is_short_term = holding_days <= 365
+                bitwave_gain_loss = short_term_gl + long_term_gl
+                if short_term_gl != 0 and long_term_gl != 0:
+                    validation_warnings.append(
+                        f"Transaction {row['txnId']}: Both short and long-term gains reported. Using holding period calculation."
+                    )
+            
+            # Calculate gain/loss and validate against Bitwave
+            calculated_gain_loss = proceeds - cost_basis
+            
+            # Validate calculated vs Bitwave gain/loss (allow small rounding differences)
+            if abs(calculated_gain_loss - bitwave_gain_loss) > 0.02:
+                validation_warnings.append(
+                    f"Asset {row['asset']} on {date_sold.strftime('%m/%d/%Y')}: "
+                    f"Calculated G/L ${calculated_gain_loss:.2f} vs Bitwave G/L ${bitwave_gain_loss:.2f}"
+                )
             
             # Create transaction record
             transaction = {
-                'description': str(row['Description']).strip(),
+                'description': f"{row['asset']} cryptocurrency",  # Format for IRS Form 8949
                 'date_acquired': date_acquired,
                 'date_sold': date_sold,
                 'proceeds': proceeds,
                 'cost_basis': cost_basis,
-                'gain_loss': gain_loss,
+                'gain_loss': bitwave_gain_loss,  # Use Bitwave's calculation for accuracy
                 'is_short_term': is_short_term,
-                'holding_days': holding_days
+                'holding_days': holding_days,
+                'lot_id': row['lotId'],
+                'txn_id': row['txnId']
             }
             
             transactions.append(transaction)
             
         except Exception as e:
-            st.warning(f"⚠️ Skipping invalid row: {e}")
+            validation_warnings.append(f"Skipping invalid row {row.get('txnId', 'unknown')}: {e}")
             continue
     
-    return transactions
+    return transactions, validation_warnings
 
-def clean_currency_value(value):
-    """Clean and parse currency values from various formats"""
-    if pd.isna(value) or value == '' or value == '-':
+def clean_bitwave_currency_value(value):
+    """Clean and parse currency values from Bitwave format"""
+    if pd.isna(value) or value == '' or value == '-' or value == ' -   ':
         return 0.0
     
     # Convert to string and clean
     str_val = str(value).strip()
     
-    # Handle parentheses for negative values
+    # Handle Bitwave's format for zero/empty values
+    if str_val in ['-', ' -   ', '']:
+        return 0.0
+    
+    # Handle parentheses for negative values (Bitwave format)
     is_negative = False
     if '(' in str_val and ')' in str_val:
         is_negative = True
         str_val = str_val.replace('(', '').replace(')', '')
     
-    # Remove currency symbols, commas, and spaces
+    # Remove currency symbols, commas, spaces
     str_val = re.sub(r'[,$\s]', '', str_val)
     
     try:
@@ -267,8 +389,8 @@ def clean_currency_value(value):
     except:
         return 0.0
 
-def separate_transactions_by_term(transactions):
-    """Separate transactions into short-term and long-term based on holding period"""
+def separate_bitwave_transactions_by_term(transactions):
+    """Separate transactions using Bitwave's short/long-term classification"""
     short_term = [t for t in transactions if t['is_short_term']]
     long_term = [t for t in transactions if not t['is_short_term']]
     return short_term, long_term
@@ -335,9 +457,9 @@ def generate_form_8949_pages(transactions, part_type, taxpayer_name, taxpayer_ss
         
         # Generate filename
         if total_pages == 1:
-            filename = f"Form_8949_{tax_year}_{term_suffix}_{taxpayer_name.replace(' ', '_')}.pdf"
+            filename = f"Form_8949_{tax_year}_{term_suffix}_Bitwave_{taxpayer_name.replace(' ', '_')}.pdf"
         else:
-            filename = f"Form_8949_{tax_year}_{term_suffix}_Page_{page_num + 1}_{taxpayer_name.replace(' ', '_')}.pdf"
+            filename = f"Form_8949_{tax_year}_{term_suffix}_Page_{page_num + 1}_Bitwave_{taxpayer_name.replace(' ', '_')}.pdf"
         
         pdf_files.append({
             'filename': filename,
@@ -566,24 +688,28 @@ def create_custom_form_8949(buffer, transactions, part_type, taxpayer_name, taxp
     c.setFont("Helvetica", 12)
     c.drawString(200, height - 50, "Sales and Other Dispositions of Capital Assets")
     
+    # Source attribution
+    c.setFont("Helvetica", 8)
+    c.drawString(50, height - 70, "Generated from Bitwave Actions Report")
+    
     # Taxpayer information
     c.setFont("Helvetica", 10)
-    c.drawString(50, height - 80, f"Name: {taxpayer_name}")
-    c.drawString(400, height - 80, f"SSN: {taxpayer_ssn}")
+    c.drawString(50, height - 90, f"Name: {taxpayer_name}")
+    c.drawString(400, height - 90, f"SSN: {taxpayer_ssn}")
     
     # Part header
     c.setFont("Helvetica-Bold", 12)
     if part_type == "Part I":
-        c.drawString(50, height - 110, "Part I - Short-Term Capital Gains and Losses")
+        c.drawString(50, height - 120, "Part I - Short-Term Capital Gains and Losses")
     else:
-        c.drawString(50, height - 110, "Part II - Long-Term Capital Gains and Losses")
+        c.drawString(50, height - 120, "Part II - Long-Term Capital Gains and Losses")
     
     # Box type
     c.setFont("Helvetica", 10)
-    c.drawString(50, height - 130, f"☑ {box_type}")
+    c.drawString(50, height - 140, f"☑ {box_type}")
     
     # Table headers
-    y_pos = height - 180
+    y_pos = height - 190
     c.setFont("Helvetica-Bold", 8)
     headers = [
         ("Description", 50),
@@ -605,7 +731,7 @@ def create_custom_form_8949(buffer, transactions, part_type, taxpayer_name, taxp
     # Transaction data
     c.setFont("Helvetica", 7)
     for i, transaction in enumerate(transactions[:14]):
-        y_pos = height - 200 - (i * 15)
+        y_pos = height - 210 - (i * 15)
         
         data = [
             (transaction['description'][:25], 50),
@@ -624,7 +750,7 @@ def create_custom_form_8949(buffer, transactions, part_type, taxpayer_name, taxp
     
     # Totals (on last page only)
     if page_num == total_pages:
-        totals_y = height - 200 - (14 * 15) - 20
+        totals_y = height - 210 - (14 * 15) - 20
         c.setFont("Helvetica-Bold", 8)
         c.drawString(50, totals_y, "TOTALS")
         
@@ -641,7 +767,7 @@ def create_custom_form_8949(buffer, transactions, part_type, taxpayer_name, taxp
     c.setFont("Helvetica", 8)
     if total_pages > 1:
         c.drawString(50, 30, f"Page {page_num} of {total_pages}")
-    c.drawRightString(width - 50, 30, f"Generated: {datetime.now().strftime('%m/%d/%Y')}")
+    c.drawRightString(width - 50, 30, f"Generated from Bitwave: {datetime.now().strftime('%m/%d/%Y')}")
     
     c.save()
 
