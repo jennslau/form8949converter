@@ -374,18 +374,18 @@ def create_form_with_official_template(buffer, transactions, part_type, taxpayer
         
         # Taxpayer information fields (header boxes)
         name_field_x = 75       # Left edge of name field box
-        name_field_y = height - 155
+        name_field_y = height - 100
         ssn_field_x = 550       # Right-aligned in SSN field box  
-        ssn_field_y = height - 155
+        ssn_field_y = height - 100
         
         # Checkbox positions - measured from actual form
         if part_type == "Part I":
             checkbox_base_y = height - 427   # Part I checkboxes (A, B, C)
             # CRITICAL FIX: Move table start DOWN to first data row below headers
-            table_start_y = height - 650     # First transaction in first data row
+            table_start_y = height - 250     # First transaction in first data row
         else:
             checkbox_base_y = height - 350   # Part II checkboxes (D, E, F) 
-            table_start_y = height - 650     # Same position for Part II
+            table_start_y = height - 250     # Same position for Part II
         
         checkbox_x = 45
         
