@@ -162,7 +162,7 @@ def main():
                 return
             
             # Process Bitwave transactions
-            transactions, validation_warnings = process_bitwave_transactions(df)
+            transactions, validation_warnings = process_bitwave_transactions(df, tax_year)
             
             # Enhanced debugging information
             sell_count = len(df[df['action'] == 'sell'])
@@ -173,6 +173,23 @@ def main():
             st.write(f"• Sell actions found: {sell_count}")
             st.write(f"• Buy actions found: {buy_count}")
             st.write(f"• Valid transactions processed: {len(transactions)}")
+            
+            # Show date range information if we have transactions
+            if len(transactions) > 0:
+                earliest_sale = min(t['date_sold'] for t in transactions)
+                latest_sale = max(t['date_sold'] for t in transactions)
+                st.write(f"• Transaction date range: {earliest_sale.strftime('%m/%d/%Y')} to {latest_sale.strftime('%m/%d/%Y')}")
+            elif len(df[df['action'] == 'sell']) > 0:
+                # Show overall date range in the data to help user select correct tax year
+                st.write("• **Date range analysis:**")
+                sell_sample = df[df['action'] == 'sell'].head(100)  # Sample for performance
+                earliest_ts = sell_sample['timestampSEC'].min()
+                latest_ts = sell_sample['timestampSEC'].max()
+                if pd.notna(earliest_ts) and pd.notna(latest_ts):
+                    earliest_date = pd.to_datetime(earliest_ts, unit='s')
+                    latest_date = pd.to_datetime(latest_ts, unit='s')
+                    st.write(f"  Sample shows transactions from {earliest_date.strftime('%m/%d/%Y')} to {latest_date.strftime('%m/%d/%Y')}")
+                    st.write(f"  Consider selecting tax year {earliest_date.year} or {latest_date.year}")
             
             if not transactions:
                 st.error("❌ No valid sell transactions could be processed from the Bitwave actions report.")
@@ -296,8 +313,8 @@ def main():
             st.error(f"❌ Error processing Bitwave actions report: {str(e)}")
             st.info("Please ensure you've uploaded a valid Bitwave actions CSV export.")
 
-def process_bitwave_transactions(df):
-    """Process Bitwave actions report into standardized transaction format"""
+def process_bitwave_transactions(df, tax_year):
+    """Process Bitwave actions report into standardized transaction format for specified tax year"""
     transactions = []
     validation_warnings = []
     
@@ -308,15 +325,16 @@ def process_bitwave_transactions(df):
         validation_warnings.append("No 'sell' actions found in the Bitwave report.")
         return transactions, validation_warnings
     
+    # Define tax year date range
+    tax_year_start = pd.Timestamp(f'{tax_year}-01-01')
+    tax_year_end = pd.Timestamp(f'{tax_year}-12-31 23:59:59')
+    
     st.info(f"Processing {len(sell_actions)} sell transactions from Bitwave actions report...")
+    st.info(f"📅 Filtering for tax year {tax_year}: {tax_year_start.strftime('%B %d, %Y')} to {tax_year_end.strftime('%B %d, %Y')}")
     
     processed_count = 0
     error_count = 0
-    
-    # Debug: Show sample of what we're processing
-    st.write("**Sample of sell actions data:**")
-    sample_df = sell_actions.head(3)[['action', 'asset', 'timestampSEC', 'lotAcquisitionTimestampSEC', ' proceeds ', ' costBasisRelieved ']].copy()
-    st.dataframe(sample_df)
+    filtered_out_count = 0
     
     for _, row in sell_actions.iterrows():
         try:
@@ -354,15 +372,14 @@ def process_bitwave_transactions(df):
             # Calculate holding period
             holding_days = (date_sold - date_acquired).days
             
+            # Filter by tax year - only include transactions sold within the specified tax year
+            if not (tax_year_start <= date_sold <= tax_year_end):
+                filtered_out_count += 1
+                continue
+            
             # Clean and parse monetary values from Bitwave format
             proceeds = clean_bitwave_currency_value(row[' proceeds '])
             cost_basis = clean_bitwave_currency_value(row[' costBasisRelieved '])
-            
-            # Skip transactions with zero proceeds and cost basis (likely data errors)
-            if proceeds == 0 and cost_basis == 0:
-                validation_warnings.append(f"Skipping transaction with zero proceeds and cost basis: {row.get('txnId', 'unknown')}")
-                error_count += 1
-                continue
             
             # Get gain/loss from Bitwave's calculations
             short_term_gl = clean_bitwave_currency_value(row[' shortTermGainLoss '])
@@ -418,9 +435,11 @@ def process_bitwave_transactions(df):
     
     # Add summary information
     if processed_count > 0:
-        st.success(f"✅ Successfully processed {processed_count} transactions")
+        st.success(f"✅ Successfully processed {processed_count} transactions for tax year {tax_year}")
     if error_count > 0:
         st.warning(f"⚠️ Skipped {error_count} transactions due to data issues")
+    if filtered_out_count > 0:
+        st.info(f"📅 Filtered out {filtered_out_count} transactions outside tax year {tax_year}")
     
     # Debug information about what failed
     if error_count > 0 and processed_count == 0:
@@ -429,6 +448,13 @@ def process_bitwave_transactions(df):
         st.write("• Missing or invalid timestamp fields") 
         st.write("• Data type mismatches")
         st.write("Check the validation warnings above for specific errors.")
+    
+    # Information about tax year filtering
+    if filtered_out_count > 0 and processed_count == 0:
+        st.warning(f"🗓️ **TAX YEAR FILTER**: No transactions found for {tax_year}")
+        st.write(f"• {filtered_out_count} transactions were outside the {tax_year} tax year")
+        st.write("• Try selecting a different tax year that matches your transaction dates")
+        st.write("• Check the sample data above to see the transaction dates in your file")
     
     return transactions, validation_warnings
 
